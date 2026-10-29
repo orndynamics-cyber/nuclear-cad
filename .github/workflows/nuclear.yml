@@ -1,0 +1,54 @@
+name: Nuclear CI
+
+# Builds the Windows app on every push to main and every pull request, and keeps the .exe files
+# as a downloadable artifact, so the app can be tried without installing Rust.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nuclear-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build desktop app and CLI
+        run: cargo build --release -p solidcraft -p solidcraft-cli
+      - name: Collect the executables
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/solidcraft.exe dist/nuclear.exe
+          Copy-Item target/release/solidcraft-cli.exe dist/nuclear-cli.exe
+          Copy-Item LICENSE-MIT, LICENSE-APACHE, NOTICE, ATTRIBUTION.md, THIRD-PARTY-LICENSES.txt dist/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nuclear-windows-x64
+          path: dist/
+
+  tests:
+    name: UI and app tests (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install graphics libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+      - name: Test
+        run: cargo test -p solidcraft-ui-egui -p solidcraft-io -p solidcraft
