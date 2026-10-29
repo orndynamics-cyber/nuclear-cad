@@ -1,0 +1,29 @@
+name: mac-dmg-oneoff
+
+on:
+  push:
+    branches: [claude/mac-dmg]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mac-x86:
+    name: macOS Intel .dmg
+    runs-on: macos-13
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
+      - name: Build and package the Intel .dmg
+        run: bash packaging/macos/package.sh --arch x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg-x86_64
+          path: dist/release/*.dmg
+          if-no-files-found: error
