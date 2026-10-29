@@ -6208,7 +6208,7 @@ mod tests {
         // Another originating system is offered (asked in the dialog, without looking at how the
         // flat box rests).
         let text = std::fs::read_to_string(&path).unwrap();
-        std::fs::write(&path, text.replace("'Nuclear','Nuclear'", "'Nuclear','Example CAD'")).unwrap();
+        std::fs::write(&path, text.replace("'SolidCraft','SolidCraft'", "'SolidCraft','Example CAD'")).unwrap();
         app.preferences.stand_up_unknown = StandUpUnknown::Ask;
         app.open_path(&path);
         let offered = app.stand_up.clone().unwrap_or_default();

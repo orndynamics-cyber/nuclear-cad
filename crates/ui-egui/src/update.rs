@@ -272,7 +272,7 @@ pub fn this_install() -> InstallKind {
 /// The folder the Windows installer recorded (solidcraft.wxs writes it for upgrades), if any.
 #[cfg(windows)]
 fn msi_install_dir() -> Option<PathBuf> {
-    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\Nuclear").ok()?;
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\SolidCraft").ok()?;
     key.get_value::<String, _>("InstallDir").ok().map(PathBuf::from)
 }
 
@@ -460,7 +460,7 @@ pub fn asset_name(kind: &InstallKind, arch: &str, version: &str) -> Option<Strin
         InstallKind::WindowsMsi => format!("solidcraft-windows-{}.msi", windows?),
         InstallKind::WindowsPortable => format!("solidcraft-windows-{}-portable.zip", windows?),
         // Only x64 has the lone .exe; elsewhere the portable zip is the same thing.
-        InstallKind::WindowsExe if windows == Some("x64") => format!("Nuclear-{version}-windows-x64.exe"),
+        InstallKind::WindowsExe if windows == Some("x64") => format!("SolidCraft-{version}-windows-x64.exe"),
         InstallKind::WindowsExe => format!("solidcraft-windows-{}-portable.zip", windows?),
         InstallKind::MacApp(_) => "solidcraft-macos-universal.dmg".into(),
         InstallKind::Dev | InstallKind::Web | InstallKind::Other => return None,
@@ -524,7 +524,7 @@ impl Release {
             })
             .collect();
         Ok(Release {
-            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("Nuclear {tag}")),
+            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("SolidCraft {tag}")),
             tag,
             notes,
             page,

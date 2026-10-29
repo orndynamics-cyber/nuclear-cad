@@ -64,8 +64,8 @@ fn install_kinds_are_told_apart() {
     assert_eq!(probe("linux", true, &[], home, &[]), InstallKind::LinuxTarball);
 
     let pf = [("ProgramFiles", "C:\\Program Files"), ("ProgramFiles(x86)", "C:\\Program Files (x86)")];
-    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\Nuclear\\solidcraft.exe", &[]), InstallKind::WindowsMsi);
-    assert_eq!(probe("windows", true, &pf, "c:\\program files\\Nuclear\\solidcraft.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
+    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi);
+    assert_eq!(probe("windows", true, &pf, "c:\\program files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
     // "C:\Program Files Extra" is not under "C:\Program Files".
     assert_eq!(probe("windows", true, &pf, "C:\\Program Files Extra\\solidcraft.exe", &[]), InstallKind::WindowsExe);
     let portable = "C:\\Users\\me\\solidcraft-0.10.0-windows-x64-portable\\solidcraft.exe";
@@ -74,11 +74,11 @@ fn install_kinds_are_told_apart() {
     if cfg!(windows) {
         assert_eq!(probe("windows", true, &pf, portable, &[cli]), InstallKind::WindowsPortable);
     }
-    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\Nuclear-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
+    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\SolidCraft-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
 
     assert_eq!(
         probe("macos", true, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]),
-        InstallKind::MacApp("/Applications/Nuclear.app".into())
+        InstallKind::MacApp("/Applications/SolidCraft.app".into())
     );
     assert_eq!(probe("macos", true, &[], "/usr/local/bin/solidcraft", &[]), InstallKind::Other);
     assert_eq!(probe("macos", false, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]), InstallKind::Dev);
@@ -102,7 +102,7 @@ fn portable_windows_layout_is_recognised() {
 /// beside it as the portable zip does. The folder it recorded is what tells its copy apart.
 #[test]
 fn an_msi_install_outside_program_files_is_recognised() {
-    let exe = PathBuf::from(r"D:\Program Files\Nuclear\solidcraft.exe");
+    let exe = PathBuf::from(r"D:\Program Files\SolidCraft\solidcraft.exe");
     let get = |k: &str| match k {
         "ProgramFiles" | "ProgramW6432" => Some(r"C:\Program Files".to_string()),
         "ProgramFiles(x86)" => Some(r"C:\Program Files (x86)".to_string()),
@@ -119,7 +119,7 @@ fn an_msi_install_outside_program_files_is_recognised() {
     // No installer copy here: the portable zip, as before.
     assert_eq!(kind(None), InstallKind::WindowsPortable);
     assert_eq!(kind(Some("")), InstallKind::WindowsPortable);
-    assert_eq!(kind(Some(r"D:\Program Files\Nuclear2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
+    assert_eq!(kind(Some(r"D:\Program Files\SolidCraft2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
 }
 
 /// The assets of v0.10.0, as published.
@@ -130,7 +130,7 @@ fn release() -> Release {
         "solidcraft-0.10.0-linux-x86_64.AppImage.zsync",
         "solidcraft-0.10.0-linux-x86_64.tar.gz",
         "solidcraft-0.10.0-linux-aarch64.tar.gz",
-        "Nuclear-0.10.0-windows-x64.exe",
+        "SolidCraft-0.10.0-windows-x64.exe",
         "solidcraft-linux-aarch64.AppImage",
         "solidcraft-linux-aarch64.deb",
         "solidcraft-linux-x86_64.AppImage",
@@ -151,7 +151,7 @@ fn release() -> Release {
         .map(|n| json!({"name": n, "size": 10, "browser_download_url": format!("https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v0.10.0/{n}")}))
         .collect();
     let body = json!({
-        "tag_name": "v0.10.0", "name": "Nuclear v0.10.0", "body": "**What's new**\n\n- Surface tools.",
+        "tag_name": "v0.10.0", "name": "SolidCraft v0.10.0", "body": "**What's new**\n\n- Surface tools.",
         "html_url": "https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v0.10.0", "draft": false, "prerelease": false, "assets": assets,
     });
     Release::parse(body.to_string().as_bytes()).unwrap()
@@ -170,7 +170,7 @@ fn each_installation_gets_its_own_file() {
     assert_eq!(name(InstallKind::WindowsMsi, "aarch64").as_deref(), Some("solidcraft-windows-arm64.msi"));
     assert_eq!(name(InstallKind::WindowsMsi, "x86").as_deref(), Some("solidcraft-windows-x86.msi"));
     assert_eq!(name(InstallKind::WindowsPortable, "x86_64").as_deref(), Some("solidcraft-windows-x64-portable.zip"));
-    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("Nuclear-0.10.0-windows-x64.exe"));
+    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("SolidCraft-0.10.0-windows-x64.exe"));
     assert_eq!(name(InstallKind::WindowsExe, "aarch64").as_deref(), Some("solidcraft-windows-arm64-portable.zip"));
     assert_eq!(name(InstallKind::MacApp("/A.app".into()), "aarch64").as_deref(), Some("solidcraft-macos-universal.dmg"));
     assert_eq!(name(InstallKind::Other, "x86_64"), None);
@@ -220,7 +220,7 @@ fn release_answers_are_checked() {
     .unwrap();
     assert_eq!(r.page, RELEASES_PAGE);
     assert_eq!(r.assets.len(), 1);
-    assert_eq!(r.name, "Nuclear v1.0.0");
+    assert_eq!(r.name, "SolidCraft v1.0.0");
     // Huge notes are cut (on a character boundary).
     let r = Release::parse(json!({"tag_name": "v1.0.0", "body": "é".repeat(MAX_NOTES)}).to_string().as_bytes()).unwrap();
     assert!(r.notes.len() <= MAX_NOTES + 8 && r.notes.ends_with('…'));
@@ -305,7 +305,7 @@ fn next_release_feed(dir: &Path) -> (PathBuf, String) {
     let path = dir.join("latest.json");
     let body = json!({
         "tag_name": format!("v{v}"),
-        "name": format!("Nuclear {v}"),
+        "name": format!("SolidCraft {v}"),
         "body": "## What's new\n\n- Faster rebuilds.",
         "html_url": format!("https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v{v}"),
         "assets": []
@@ -622,21 +622,21 @@ fn the_record_matches_folders_bundles_and_windows_paths() {
     let home = |k: &str| (k == "HOME").then(|| "/home/me/.local/share/artcraft-launcher/apps/solidcraft/home".to_string());
     assert_eq!(managed_by("linux", &home, Some(exe), &InstallKind::LinuxTarball, &read).as_deref(), Some("ArtCraft Launcher"));
     // macOS: the bundle.
-    let bundle = PathBuf::from("/Applications/Nuclear.app");
+    let bundle = PathBuf::from("/Applications/SolidCraft.app");
     let mac = InstallKind::MacApp(bundle.clone());
     let exe = Path::new("/Applications/SolidCraft.app/Contents/MacOS/solidcraft");
     let home = |k: &str| (k == "HOME").then(|| "/Users/me".to_string());
     let read = |p: &Path| {
         assert_eq!(p, Path::new("/Users/me/Library/Application Support/ArtCraft Launcher/installed.json"));
-        Some(record("/Applications/Nuclear.app"))
+        Some(record("/Applications/SolidCraft.app"))
     };
     assert_eq!(managed_by("macos", &home, Some(exe), &mac, &read).as_deref(), Some("ArtCraft Launcher"));
     // Windows: case and the verbatim prefix don't matter, and the record is under LOCALAPPDATA.
     let local = |k: &str| (k == "LOCALAPPDATA").then(|| r"C:\Users\me\AppData\Local".to_string());
-    let exe = Path::new(r"C:\Users\me\AppData\Local\Programs\Nuclear\solidcraft.exe");
+    let exe = Path::new(r"C:\Users\me\AppData\Local\Programs\SolidCraft\solidcraft.exe");
     let read = nothing_else(record(r"\\?\c:\users\me\appdata\local\programs\solidcraft\SOLIDCRAFT.EXE"));
     assert_eq!(managed_by("windows", &local, Some(exe), &InstallKind::WindowsExe, &read).as_deref(), Some("ArtCraft Launcher"));
-    let read = nothing_else(record(r"C:\Users\me\AppData\Local\Programs\Nuclear2"));
+    let read = nothing_else(record(r"C:\Users\me\AppData\Local\Programs\SolidCraft2"));
     assert_eq!(managed_by("windows", &local, Some(exe), &InstallKind::WindowsExe, &read), None, "a folder whose name only starts the same");
     // Linux paths are case-sensitive.
     let read = nothing_else(record("/OPT/SC"));

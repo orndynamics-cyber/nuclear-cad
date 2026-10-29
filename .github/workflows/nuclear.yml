@@ -50,5 +50,12 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest
+      # The same runner and profiles as upstream SolidCraft's CI: the `ci` cargo profile (debug
+      # assertions off; egui's debug-only checks fail headless UI tests) and nextest's `ci` profile
+      # (each test in its own process, heavy tests skipped). Timing tests such as the first-hover
+      # check assume that isolation.
       - name: Test
-        run: cargo test -p solidcraft-ui-egui -p solidcraft-io -p solidcraft
+        run: cargo nextest run --cargo-profile ci --profile ci --locked --no-tests=pass --lib --bins -p solidcraft-ui-egui -p solidcraft-io -p solidcraft -p solidcraft-cli

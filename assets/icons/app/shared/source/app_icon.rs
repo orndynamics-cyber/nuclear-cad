@@ -2,7 +2,8 @@
 //! and 120 degrees around a nucleus, on a transparent background. Drawn here from geometry, not
 //! from an image, so every export (`cargo xtask app-icons`) stays in step.
 
-/// Orbit half-axes and stroke, as shares of the icon's size.
+/// Orbit half-axes and stroke, as shares of the icon's size (the stroke is never thinner than
+/// 1.6 px, so small icons keep solid orbits).
 const ORBIT_A: f32 = 0.46;
 const ORBIT_B: f32 = 0.17;
 const ORBIT_W: f32 = 0.045;
@@ -13,7 +14,7 @@ const ORBITS: [[u8; 3]; 3] = [[21, 73, 158], [35, 121, 231], [69, 159, 255]];
 const NUCLEUS: [u8; 3] = [255, 140, 26];
 
 /// The colour of the sample at (x, y), in shares of the icon's size from its centre, if any.
-fn sample(x: f32, y: f32) -> Option<[u8; 3]> {
+fn sample(x: f32, y: f32, orbit_w: f32) -> Option<[u8; 3]> {
     if x * x + y * y <= NUCLEUS_R * NUCLEUS_R {
         return Some(NUCLEUS);
     }
@@ -24,7 +25,7 @@ fn sample(x: f32, y: f32) -> Option<[u8; 3]> {
         let (a2, b2) = (ORBIT_A * ORBIT_A, ORBIT_B * ORBIT_B);
         let f = u * u / a2 + v * v / b2 - 1.0;
         let g = ((2.0 * u / a2).powi(2) + (2.0 * v / b2).powi(2)).sqrt().max(1e-6);
-        if (f / g).abs() <= ORBIT_W / 2.0 {
+        if (f / g).abs() <= orbit_w / 2.0 {
             hit = Some(*col);
         }
     }
@@ -39,6 +40,7 @@ pub fn rgba(size: usize) -> Result<Vec<u8>, String> {
     // 4x4 samples per pixel (2x2 for big sizes), averaged down to straight alpha.
     let ss = if size > 512 { 2 } else { 4 };
     let n = (size * ss) as f32;
+    let orbit_w = ORBIT_W.max(1.6 / size as f32);
     let mut rgba = Vec::with_capacity(size * size * 4);
     for y in 0..size {
         for x in 0..size {
@@ -47,7 +49,7 @@ pub fn rgba(size: usize) -> Result<Vec<u8>, String> {
                 for i in 0..ss {
                     let sx = ((x * ss + i) as f32 + 0.5) / n - 0.5;
                     let sy = ((y * ss + j) as f32 + 0.5) / n - 0.5;
-                    if let Some(c) = sample(sx, sy) {
+                    if let Some(c) = sample(sx, sy, orbit_w) {
                         cnt += 1;
                         for k in 0..3 {
                             sum[k] += u32::from(c[k]);
