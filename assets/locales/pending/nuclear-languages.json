@@ -2718,6 +2718,24 @@
     "storage.title": "Хранилище",
     "storage.unwritable": "Nuclear не может записывать в эту папку: {reason}",
     "storage.use_default": "Использовать Документы/Nuclear Projects",
-    "storage.prepare_failed": "Не удалось подготовить папку проектов: {reason}. Выберите другую папку кнопкой «Хранилище» рядом с «Старт»."
+    "storage.prepare_failed": "Не удалось подготовить папку проектов: {reason}. Выберите другую папку кнопкой «Хранилище» рядом с «Старт».",
+    "cmd.file_versions": "История версий",
+    "cmd.file_version_protect": "Защитить версию",
+    "cmd.file_version_open": "Открыть версию",
+    "cmd.file_version_restore": "Восстановить версию",
+    "storage.versions": "Версии",
+    "storage.keep_versions": "Хранить последние версии (0 — хранить все)",
+    "storage.versions_note": "Сохранение (Ctrl+S) создаёт постоянную версию в папке Nuclear Versions рядом с проектом. Автосохранение никогда этого не делает. Защищённые версии хранятся дополнительно, поэтому их общее число может быть больше.",
+    "storage.versions_impact": "При следующем сохранении будут удалены эти версии проекта: {versions}",
+    "storage.version_history": "История версий…",
+    "storage.version_failed": "Сохранено, но версию записать не удалось: {reason}",
+    "versions.none": "Версий пока нет. Сохраните проект, чтобы создать первую.",
+    "versions.protect": "Защитить",
+    "versions.unprotect": "Снять защиту",
+    "versions.protected": "Защищена",
+    "versions.open": "Открыть",
+    "versions.restore": "Восстановить",
+    "versions.restore_needs_save": "Сначала сохраните или отмените изменения.",
+    "versions.restored_from": "восстановлена из {version}"
   }
 }
