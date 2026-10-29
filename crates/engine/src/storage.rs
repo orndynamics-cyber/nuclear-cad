@@ -66,8 +66,8 @@ impl Status {
 
 /// The Documents folder on systems where no native API is needed: `SOLIDCRAFT_DOCUMENTS_DIR`
 /// (tests, portable setups), else on macOS `~/Documents` (what the system's API answers there),
-/// else on Linux and the BSDs `XDG_DOCUMENTS_DIR` from `user-dirs.dirs`, else the home folder
-/// (the XDG fallback). Windows: the desktop app asks the known-folder API and passes the answer
+/// else on Linux and the BSDs `XDG_DOCUMENTS_DIR` from `user-dirs.dirs`, else an existing
+/// `~/Documents`, else the home folder (the XDG fallback). Windows: the desktop app asks the known-folder API and passes the answer
 /// to [`library_dir`]; this answers only the override there.
 pub fn documents_dir() -> Option<PathBuf> {
     if let Some(d) = solidcraft_geom::env::var_os("DOCUMENTS_DIR").filter(|d| !d.is_empty()) {
@@ -82,7 +82,9 @@ pub fn documents_dir() -> Option<PathBuf> {
     }
     let config = std::env::var_os("XDG_CONFIG_HOME").filter(|d| !d.is_empty()).map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
     let text = fs::read_to_string(config.join("user-dirs.dirs")).unwrap_or_default();
-    Some(xdg_documents(&text, &home).unwrap_or(home))
+    // Without xdg-user-dirs, a Documents folder already in the home folder is the one people
+    // use; else the home folder itself, as the XDG default says.
+    Some(xdg_documents(&text, &home).unwrap_or_else(|| Some(home.join("Documents")).filter(|d| d.is_dir()).unwrap_or(home)))
 }
 
 /// `XDG_DOCUMENTS_DIR` from the text of a `user-dirs.dirs` file: `"$HOME/..."` or an absolute

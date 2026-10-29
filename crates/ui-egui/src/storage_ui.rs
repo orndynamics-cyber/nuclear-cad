@@ -205,7 +205,9 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             match &dir {
                 Some(d) => {
                     let path = d.display().to_string();
-                    ui_kit::path_chip(ui, &path, |ui| {
+                    // The whole path, wrapped: a chip would cut it short.
+                    ui_kit::text(ui, &path, ui_kit::Text::MonoNote("storage:path"));
+                    ui.horizontal(|ui| {
                         if ui_kit::icon_label_button(ui, crate::i18n::tr("crash.copy_folder"), "copy", true, false).clicked() {
                             ctx.copy_text(path.clone());
                         }
