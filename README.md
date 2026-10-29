@@ -1,3 +1,23 @@
+# Nuclear
+
+**Nuclear is our own parametric 3D CAD app, based on [SolidCraft](https://github.com/tangency-labs/solidcraft).**
+It keeps SolidCraft's Rust core (sketch solver, feature timeline, B-rep kernel, MCP server) and
+adds its own name, look and features on top. Nuclear is not affiliated with or endorsed by the
+SolidCraft project; see [NOTICE](NOTICE) for attribution and the licence terms (MIT OR Apache-2.0).
+
+- **Try it on Windows:** open the latest run of the *Nuclear CI* workflow under the Actions tab and
+  download the `nuclear-windows-x64` artifact (`nuclear.exe` and `nuclear-cli.exe`).
+- **Build it yourself:** install Rust from https://rustup.rs, then run
+  `cargo run --release -p solidcraft -- --sample`.
+- **Model with Claude:** `claude mcp add nuclear -- solidcraft-cli mcp`.
+
+Internal crate, binary and file-format names still say `solidcraft`, so designs stay compatible
+and upstream fixes can be merged. Only what users see is renamed for now.
+
+The original SolidCraft README follows.
+
+---
+
 <p align="center">
   <img src="assets/icons/app/linux/exports/hicolor/256x256/apps/io.tangencylabs.solidcraft.png" width="96" height="96" alt="SolidCraft" />
 </p>

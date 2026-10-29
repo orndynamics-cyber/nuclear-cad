@@ -6204,7 +6204,7 @@ mod tests {
 
         let mut app = SolveApp::new(solidcraft_engine::Session::default(), Default::default());
         app.open_path(&path);
-        assert!(app.stand_up.is_none(), "SolidCraft's own exports already have Z up");
+        assert!(app.stand_up.is_none(), "Nuclear's own exports already have Z up");
         // Another originating system is offered (asked in the dialog, without looking at how the
         // flat box rests).
         let text = std::fs::read_to_string(&path).unwrap();

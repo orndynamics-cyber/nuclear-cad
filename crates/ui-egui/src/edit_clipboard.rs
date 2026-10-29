@@ -193,7 +193,7 @@ pub fn copy_design(app: &mut SolveApp) -> bool {
     };
     replace_clipboard(app);
     app.linked_design_clipboard = Some(path);
-    leave_text(app, format!("SolidCraft linked design: {}", app.session.doc.name));
+    leave_text(app, format!("Nuclear linked design: {}", app.session.doc.name));
     app.set_status("Copied design: switch to the assembly and paste to insert a linked component", false);
     true
 }
@@ -213,7 +213,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
         replace_clipboard(app);
         let n = out.get("curves").and_then(Value::as_u64).unwrap_or(0) + out.get("points").and_then(Value::as_u64).unwrap_or(0);
         let k = out.get("constraints").and_then(Value::as_u64).unwrap_or(0);
-        let text = format!("SolidCraft sketch geometry: {n} entities, {k} constraints and dimensions");
+        let text = format!("Nuclear sketch geometry: {n} entities, {k} constraints and dimensions");
         app.set_status(format!("Copied {n} sketch entities with {k} constraints and dimensions"), false);
         leave_text(app, text);
         return true;
@@ -324,7 +324,7 @@ pub fn cut(app: &mut SolveApp) -> bool {
     replace_clipboard(app);
     let n = out.get("curves").and_then(Value::as_u64).unwrap_or(0) + out.get("points").and_then(Value::as_u64).unwrap_or(0);
     app.set_status(format!("Cut {n} sketch entities"), false);
-    leave_text(app, format!("SolidCraft sketch geometry: {n} entities"));
+    leave_text(app, format!("Nuclear sketch geometry: {n} entities"));
     true
 }
 

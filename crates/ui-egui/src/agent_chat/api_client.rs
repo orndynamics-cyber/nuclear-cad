@@ -824,7 +824,7 @@ impl Worker {
 
     /// One MCP request to the server; its `result`.
     fn mcp_call(&mut self, method: &str, params: Value) -> Result<Value, String> {
-        let Some(m) = self.mcp.as_ref() else { return Err("no SolidCraft tools in this session".into()) };
+        let Some(m) = self.mcp.as_ref() else { return Err("no Nuclear tools in this session".into()) };
         self.next += 1;
         let id = self.next;
         m.send(&json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
@@ -847,9 +847,9 @@ impl Worker {
                     }
                     return Ok(v.get("result").cloned().unwrap_or(Value::Null));
                 }
-                Ok(FromAgent::Exited(_)) => return Err("the SolidCraft tools stopped".into()),
+                Ok(FromAgent::Exited(_)) => return Err("the Nuclear tools stopped".into()),
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) if std::time::Instant::now() < deadline => {}
-                Err(_) => return Err("the SolidCraft tools did not answer".into()),
+                Err(_) => return Err("the Nuclear tools did not answer".into()),
             }
         }
     }

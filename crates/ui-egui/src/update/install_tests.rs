@@ -68,14 +68,14 @@ fn methods_per_installation() {
     }
 }
 
-const BASE: &str = "https://github.com/bherbruck/solidcraft/releases/download/v9.9.9/";
+const BASE: &str = "https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v9.9.9/";
 
 fn release_with(assets: &[(&str, usize)]) -> Release {
     Release {
         tag: "v9.9.9".into(),
         name: "SolidCraft v9.9.9".into(),
         notes: String::new(),
-        page: "https://github.com/bherbruck/solidcraft/releases/tag/v9.9.9".into(),
+        page: "https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v9.9.9".into(),
         assets: assets.iter().map(|(n, size)| Asset { name: n.to_string(), url: format!("{BASE}{n}"), size: *size as u64 }).collect(),
     }
 }

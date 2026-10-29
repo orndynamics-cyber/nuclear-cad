@@ -40,7 +40,7 @@ pub fn initialize_params(version: &str) -> Value {
             "auth": {"terminal": true},
             "_meta": {"terminal-auth": true},
         },
-        "clientInfo": {"name": "solidcraft", "title": "SolidCraft", "version": version},
+        "clientInfo": {"name": "solidcraft", "title": "Nuclear", "version": version},
     })
 }
 
@@ -557,17 +557,17 @@ mod tests {
         assert!(!runs_in_wsl(&[]));
 
         let wsl = |p: &str| wsl_path(std::path::Path::new(p)).to_string_lossy().into_owned();
-        assert_eq!(wsl(r"C:\Users\u\AppData\Local\SolidCraft\agent-chat\work"), "/mnt/c/Users/u/AppData/Local/SolidCraft/agent-chat/work");
-        assert_eq!(wsl(r"\\?\D:\Program Files\SolidCraft\solidcraft-cli.exe"), "/mnt/d/Program Files/SolidCraft/solidcraft-cli.exe");
+        assert_eq!(wsl(r"C:\Users\u\AppData\Local\Nuclear\agent-chat\work"), "/mnt/c/Users/u/AppData/Local/Nuclear/agent-chat/work");
+        assert_eq!(wsl(r"\\?\D:\Program Files\Nuclear\solidcraft-cli.exe"), "/mnt/d/Program Files/Nuclear/solidcraft-cli.exe");
         assert_eq!(wsl("E:/designs"), "/mnt/e/designs");
         assert_eq!(wsl("C:"), "/mnt/c/");
         assert_eq!(wsl("/home/u/designs"), "/home/u/designs");
         assert_eq!(wsl(r"\\server\share\x"), r"\\server\share\x");
 
-        let b = McpBridge { cli: r"C:\Program Files\SolidCraft\solidcraft-cli.exe".into(), port: 41234 };
+        let b = McpBridge { cli: r"C:\Program Files\Nuclear\solidcraft-cli.exe".into(), port: 41234 };
         let p = session_new_params(&wsl_path(std::path::Path::new(r"C:\Users\u\work")), Some(&b.in_wsl()));
         assert_eq!(p["cwd"], "/mnt/c/Users/u/work");
-        assert_eq!(p["mcpServers"][0]["command"], "/mnt/c/Program Files/SolidCraft/solidcraft-cli.exe");
+        assert_eq!(p["mcpServers"][0]["command"], "/mnt/c/Program Files/Nuclear/solidcraft-cli.exe");
         assert_eq!(p["mcpServers"][0]["args"], json!(["mcp", "--connect", "127.0.0.1:41234"]));
     }
 
