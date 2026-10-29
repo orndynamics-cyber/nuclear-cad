@@ -319,7 +319,8 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui, painter: &egui::Painter, proj
     if matches!(d.kind, Kind::Move { .. }) {
         let mut dragging = false;
         if let Some(t) = crate::dialogs_move::triad(app, &d)
-            && let Some(g) = crate::gizmo::show(ui, painter, proj, egui::Id::new("sc_move_triad"), &t, snap_step(app.cam.half_height()))
+            && let Some(g) =
+                crate::gizmo::show(ui, painter, proj, egui::Id::new("sc_move_triad"), &t, crate::manipulator_step::linear(proj, t.center))
         {
             crate::dialogs_move::drag(app, &mut d, g);
             dragging = true;
@@ -433,16 +434,9 @@ fn draw_move_rotation(app: &SolveApp, ui: &mut egui::Ui, painter: &egui::Painter
 }
 
 /// A round step for dragged values at this zoom (1, 2 or 5 times a power of ten).
+/// Manipulators take theirs from `manipulator_step`, which chooses between this and others.
 pub fn snap_step(half_height: f64) -> f64 {
-    let raw = (half_height / 40.0).max(1e-4);
-    let p = 10f64.powf(raw.log10().floor());
-    if raw / p < 2.0 {
-        p
-    } else if raw / p < 5.0 {
-        2.0 * p
-    } else {
-        5.0 * p
-    }
+    crate::manipulator_step::round_step(half_height / 40.0)
 }
 
 /// Parameter along the line `base + dir * t` closest to the view ray through `pos`.
@@ -1038,8 +1032,8 @@ fn drag_arrow(
         crate::tool_modifiers::set_manipulator_dragging(true);
         let v = v - ui.data(|d| d.get_temp::<f64>(grab)).unwrap_or(0.0);
         let free = crate::tool_modifiers::manipulator_free();
-        let step = snap_step(half_height);
-        let mut v = if free { v } else { (v / step).round() * step };
+        let step = crate::manipulator_step::linear(proj, base);
+        let mut v = if free { v } else { crate::manipulator_step::snap(v, step) };
         if !signed {
             v = v.max(if free { 1e-3 } else { step });
         }
@@ -1183,7 +1177,6 @@ fn radius_spline_handles(app: &SolveApp, ui: &mut egui::Ui, painter: &egui::Pain
             edit = Some(Edit::Insert(u));
         }
     }
-    let half_height = app.cam.half_height();
     let last = base.radii.len().saturating_sub(1);
     for (i, e) in drawn.iter().enumerate() {
         let at = |u: f64| e.start + (e.other - e.start) * u;
@@ -1218,8 +1211,8 @@ fn radius_spline_handles(app: &SolveApp, ui: &mut egui::Ui, painter: &egui::Pain
             {
                 crate::tool_modifiers::set_manipulator_dragging(true);
                 let free = crate::tool_modifiers::manipulator_free();
-                let step = snap_step(half_height);
-                let v = if free { v } else { (v / step).round() * step };
+                let step = crate::manipulator_step::linear(proj, at(*u));
+                let v = if free { v } else { crate::manipulator_step::snap(v, step) };
                 // Zero only at an end, where the round closes to a point.
                 let floor = if k == 0 || k == last {
                     0.0
@@ -1723,7 +1716,8 @@ fn rotation_handle(
                 .unwrap_or_else(|| raw.clamp(bounds.0, bounds.1));
             let mut angle = (boundary_angle.clamp(bounds.0, bounds.1) * scale + offset).to_degrees();
             if !crate::tool_modifiers::manipulator_free() {
-                angle = (angle / 5.0).round() * 5.0;
+                let step = crate::manipulator_step::angle_deg();
+                angle = (angle / step).round() * step;
             }
             if angle.abs() < 0.05 {
                 angle = 0.0;

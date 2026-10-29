@@ -107,6 +107,7 @@ mod loft_rails_dialog_tests;
 mod look_at_tests;
 #[cfg(test)]
 mod manage_dialogs_tests;
+pub(crate) mod manipulator_step;
 mod material_card_review;
 mod material_editor;
 

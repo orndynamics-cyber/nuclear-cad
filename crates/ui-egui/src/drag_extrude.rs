@@ -2,7 +2,8 @@
 //! has moved far enough upward, or along the surface's normal on screen, Extrude starts on the
 //! pick; the distance follows the pointer along the normal in steps. Moving the pointer sideways
 //! while pulling sets the step: to the right it grows (1, 2, 3 ... 10 mm), to the left it
-//! shrinks (0.8, 0.5 ... 0.1 mm). The step and the distance show beside the pointer. Letting go
+//! shrinks (0.8, 0.5 ... 0.1 mm). With a fixed step chosen in the step menu beside the browser
+//! (`manipulator_step`), the step stays that one. The step and the distance show beside the pointer. Letting go
 //! leaves the Extrude window open to adjust and confirm with OK. A press that goes any other
 //! way stays a box selection.
 
@@ -63,6 +64,11 @@ pub struct State {
     last_step: Option<f64>,
 }
 
+/// A press on a surface may turn into a pull (the step follows its part's size).
+pub fn pressed(app: &SolveApp) -> bool {
+    app.viewport.drag_extrude.gesture.is_some()
+}
+
 /// A pull has started: the box selection stays out of it.
 pub fn started(app: &SolveApp) -> bool {
     app.viewport.drag_extrude.gesture.as_ref().is_some_and(|g| g.started)
@@ -99,7 +105,7 @@ pub fn press(app: &mut SolveApp, proj: &Proj, at: Pos2) {
         normal,
         grab,
         started: false,
-        step0: nearest_step(crate::canvas::snap_step(app.cam.half_height())),
+        step0: nearest_step(crate::manipulator_step::linear(proj, base)),
         x0: at.x,
         step: 0.0,
         at,
@@ -139,14 +145,14 @@ pub fn to(app: &mut SolveApp, proj: &Proj, p: Pos2) {
         g = Gesture { started: true, x0: p.x, ..g };
     }
     g.at = p;
-    g.step = STEPS[step_index(g.step0, p.x - g.x0)];
+    g.step = if crate::manipulator_step::fixed() { crate::manipulator_step::linear(proj, g.base) } else { STEPS[step_index(g.step0, p.x - g.x0)] };
     let Some(v) = crate::canvas::along(proj, p, g.base, g.normal) else {
         app.viewport.drag_extrude.gesture = Some(g);
         return;
     };
     let free = crate::tool_modifiers::manipulator_free();
     let travelled = v - g.grab;
-    let travelled = if free { travelled } else { (travelled / g.step).round() * g.step };
+    let travelled = if free { travelled } else { crate::manipulator_step::snap(travelled, g.step) };
     app.viewport.drag_extrude.last_step = Some(g.step);
     app.viewport.drag_extrude.gesture = Some(g);
     let Some(Kind::Extrude { distance, direction, .. }) = app.dialog.as_mut().map(|d| &mut d.kind) else { return };
@@ -178,14 +184,18 @@ pub fn step_note(app: &SolveApp) -> Option<String> {
 pub fn show(app: &SolveApp, painter: &egui::Painter) {
     let Some(g) = app.viewport.drag_extrude.gesture.as_ref().filter(|g| g.started) else { return };
     let t = crate::theme::Tokens::get();
+    let fixed = crate::manipulator_step::fixed();
     let now = nearest_step(g.step);
     let galley = |i: usize, current: bool| {
         let size = if current { t.font_body * 1.25 } else { t.font_body };
         let color = if current { t.accent } else { t.text_dim };
-        let text = STEPS.get(i).map(|s| crate::canvas::format_len(&app.session.doc, *s)).unwrap_or_default();
+        let step = if fixed { Some(g.step) } else { STEPS.get(i).copied() };
+        let text = step.map(|s| crate::canvas::format_len(&app.session.doc, s)).unwrap_or_default();
         painter.layout_no_wrap(text, egui::FontId::proportional(size), color)
     };
-    let cells: Vec<_> = (now.saturating_sub(2)..=(now + 2).min(STEPS.len() - 1)).map(|i| (galley(i, i == now), i == now)).collect();
+    // A fixed step shows alone: sideways moves do not change it.
+    let range = if fixed { now..=now } else { now.saturating_sub(2)..=(now + 2).min(STEPS.len() - 1) };
+    let cells: Vec<_> = range.map(|i| (galley(i, i == now), i == now)).collect();
     let gap = 12.0;
     let width = cells.iter().map(|(g, _)| g.size().x).sum::<f32>() + gap * cells.len().saturating_sub(1) as f32;
     let height = cells.iter().map(|(g, _)| g.size().y).fold(0.0, f32::max);
