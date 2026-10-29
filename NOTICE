@@ -1,3 +1,11 @@
+Nuclear
+Copyright (c) 2026 Mateus Orn and Nuclear contributors.
+Nuclear is a modified version of SolidCraft (https://github.com/tangency-labs/solidcraft),
+imported with its full history on 2026-10-29 at upstream commit 93d0298d. Changes since then are
+recorded in this repository's git history. Nuclear is not affiliated with or endorsed by the
+SolidCraft project. Licensed, like SolidCraft, under the MIT License or the Apache License,
+Version 2.0, at your option (LICENSE-MIT, LICENSE-APACHE).
+
 SolidCraft
 Copyright (c) 2026 SolidCraft contributors.
 Licensed under the MIT License or the Apache License, Version 2.0, at your option

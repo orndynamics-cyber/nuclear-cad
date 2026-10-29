@@ -246,7 +246,7 @@ impl App {
         let Some(gpu) = self.gpu.as_mut().filter(|g| g.lost_at.is_none() && g.lost.is_lost()) else { return };
         let reason = gpu.lost.reason().unwrap_or_default();
         log::error!("graphics: the device was lost ({reason}); closing to start again");
-        eprintln!("SolidCraft graphics: the device was lost ({reason}); starting again");
+        eprintln!("Nuclear graphics: the device was lost ({reason}); starting again");
         solidcraft_engine::crash::phase(&format!("graphics device lost: {reason}"));
         gpu.lost_at = Some(device_lost::now_secs());
         self.solve.quit_requested = true;
@@ -408,9 +408,9 @@ fn services(cc: &eframe::CreationContext<'_>, folder: &DialogFolder) -> Services
             let dialog = save_folder.start(parent.clone()).set_file_name(name);
             let dialog = if exts == [io::DESIGN_EXT, "json"] {
                 if name.ends_with(".json") {
-                    dialog.add_filter("Plain JSON design", &["json"]).add_filter("SolidCraft container", &[io::DESIGN_EXT])
+                    dialog.add_filter("Plain JSON design", &["json"]).add_filter("Nuclear container", &[io::DESIGN_EXT])
                 } else {
-                    dialog.add_filter("SolidCraft container", &[io::DESIGN_EXT]).add_filter("Plain JSON design", &["json"])
+                    dialog.add_filter("Nuclear container", &[io::DESIGN_EXT]).add_filter("Plain JSON design", &["json"])
                 }
             } else {
                 dialog.add_filter("File", exts)
@@ -503,7 +503,7 @@ fn agent_http(r: &solidcraft_ui_egui::agent_chat::backend::HttpRequest) -> Resul
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(r.timeout_s.clamp(1, 3600))))
         .timeout_connect(Some(Duration::from_secs(10)))
-        .user_agent("SolidCraft")
+        .user_agent("Nuclear")
         .max_redirects(0)
         .build()
         .into();
@@ -586,7 +586,7 @@ fn http_call(url: &str, timeout: std::time::Duration) -> Result<ureq::http::Resp
         .http_status_as_error(false)
         .timeout_global(Some(timeout))
         .timeout_connect(Some(Duration::from_secs(5)))
-        .user_agent("SolidCraft-update-check")
+        .user_agent("Nuclear-update-check")
         .max_redirects(3)
         .build()
         .into();
@@ -719,7 +719,7 @@ fn app_viewport(custom_titlebar: bool) -> Result<egui::ViewportBuilder, eframe::
     let icon =
         egui::IconData { rgba: app_icon::rgba(64).map_err(|e| eframe::Error::AppCreation(std::io::Error::other(e).into()))?, width: 64, height: 64 };
     Ok(egui::ViewportBuilder::default()
-        .with_title("SolidCraft")
+        .with_title("Nuclear")
         .with_icon(icon)
         .with_inner_size([1600.0, 1000.0])
         .with_min_inner_size([960.0, 600.0])
@@ -748,7 +748,7 @@ impl Drop for DriverClient {
 
 fn main() -> eframe::Result {
     #[cfg(target_os = "macos")]
-    objc2_foundation::NSProcessInfo::processInfo().setProcessName(objc2_foundation::ns_string!("SolidCraft"));
+    objc2_foundation::NSProcessInfo::processInfo().setProcessName(objc2_foundation::ns_string!("Nuclear"));
     mark("main");
     // Validate before legacy adoption, crash markers or any user preference read.
     let settings = settings_dir().map_err(|error| eframe::Error::AppCreation(error.into()))?;
@@ -801,7 +801,7 @@ fn main() -> eframe::Result {
     if let Some(value) = max_file_size {
         let applied = startup::max_file_size(value.as_deref()).and_then(|bytes| solidcraft_engine::io::limits::set_override(Some(bytes)));
         if let Err(error) = applied {
-            eprintln!("SolidCraft: {error}");
+            eprintln!("Nuclear: {error}");
             return Err(eframe::Error::AppCreation(std::io::Error::other(error).into()));
         }
     }
@@ -829,7 +829,7 @@ fn main() -> eframe::Result {
     let fallback_note = std::env::var(startup::FALLBACK_NOTE_ENV).ok().map(|s| s.chars().take(4096).collect::<String>());
     if let Some(note) = &fallback_note {
         log::warn!("{note}");
-        eprintln!("SolidCraft: {note}");
+        eprintln!("Nuclear: {note}");
         notes.push(note.clone());
     }
     let saved_samples = if safe_mode { None } else { msaa() };
@@ -936,13 +936,13 @@ fn main() -> eframe::Result {
                 // Windows: the taskbar button shows the mark even when slow first frames keep the
                 // taskbar waiting for the window's icon.
                 if !native_frame::set_class_icon(cc) {
-                    eprintln!("SolidCraft window: no class icon; the taskbar may show a generic one");
+                    eprintln!("Nuclear window: no class icon; the taskbar may show a generic one");
                 }
                 // The OS hit test offers the resize border, at the window's DPI, from the first
                 // message (#1381).
                 app.native_resize_border = custom_titlebar && native_frame::install(cc);
                 if custom_titlebar && !app.native_resize_border {
-                    eprintln!("SolidCraft window: no native resize border; egui edge zones instead");
+                    eprintln!("Nuclear window: no native resize border; egui edge zones instead");
                 }
             }
             app.integrated_titlebar = cfg!(target_os = "macos");
@@ -981,7 +981,7 @@ fn main() -> eframe::Result {
                     eframe::egui_wgpu::supported_msaa_samples(&rs.adapter, &rs.device, rs.target_format, depth)
                 });
                 let scene_samples = scene_samples(info.backend, u32::from(samples), &supported);
-                eprintln!("SolidCraft graphics: {:?}, MSAA {scene_samples}x (requested {}x)", rs.adapter.get_info().backend, samples);
+                eprintln!("Nuclear graphics: {:?}, MSAA {scene_samples}x (requested {}x)", rs.adapter.get_info().backend, samples);
                 solidcraft_engine::crash::phase("viewport pipelines (shader compile)");
                 let scene_samples = app.set_wgpu_split(rs, depth_bits, STENCIL_BITS, scene_samples);
                 app.msaa_supported = supported;
@@ -1118,7 +1118,7 @@ fn wgpu_options(cpu: bool, preference: Option<&str>) -> eframe::egui_wgpu::WgpuC
         let retry = std::env::var(startup::RETRY_BACKEND_ENV).ok();
         let preference = if cpu { preference } else { retry.as_deref().or(preference) };
         if let Some(backends) = startup::choose_backends(cfg!(target_os = "windows"), env_set, cpu, preference, startup::has_hardware_adapter) {
-            eprintln!("SolidCraft graphics: starting {backends:?}");
+            eprintln!("Nuclear graphics: starting {backends:?}");
             setup.instance_descriptor.backends = backends;
         }
         let intel_mac = cfg!(all(target_os = "macos", target_arch = "x86_64"));
@@ -1144,7 +1144,7 @@ fn wgpu_options(cpu: bool, preference: Option<&str>) -> eframe::egui_wgpu::WgpuC
 /// event loop or a failed device; each retry advances through the APIs, then software once.
 fn no_window(error: eframe::Error, tried_cpu: bool, failed: eframe::wgpu::Backends, settings: Option<&std::path::Path>) -> eframe::Result {
     log::error!("the window could not open: {error}");
-    eprintln!("SolidCraft: the window could not open: {error}");
+    eprintln!("Nuclear: the window could not open: {error}");
     // This failure was handled, so neither the marker nor the journal should call it a crash.
     if let Some(dir) = settings {
         startup::started(dir);
@@ -1157,7 +1157,7 @@ fn no_window(error: eframe::Error, tried_cpu: bool, failed: eframe::wgpu::Backen
         let previous = std::env::var(startup::FALLBACK_NOTE_ENV).unwrap_or_default();
         let note = startup::fallback_note(&previous, failed, next, &error.to_string());
         log::warn!("{note}");
-        eprintln!("SolidCraft: {note}");
+        eprintln!("Nuclear: {note}");
         let mut command = std::process::Command::new(exe);
         command.args(std::env::args_os().skip(1)).env(startup::FALLBACK_NOTE_ENV, note);
         if next == "cpu" {
@@ -1173,13 +1173,13 @@ fn no_window(error: eframe::Error, tried_cpu: bool, failed: eframe::wgpu::Backen
         }
     }
     let message = if explicit {
-        format!("SolidCraft could not open its window with WGPU_BACKEND.\n\n{error}\n\nChange or remove WGPU_BACKEND to try another graphics API.")
+        format!("Nuclear could not open its window with WGPU_BACKEND.\n\n{error}\n\nChange or remove WGPU_BACKEND to try another graphics API.")
     } else {
         startup::no_window_message(&error.to_string(), settings)
     };
     let _ = rfd::MessageDialog::new()
         .set_level(rfd::MessageLevel::Error)
-        .set_title("SolidCraft could not start")
+        .set_title("Nuclear could not start")
         .set_description(message)
         .set_buttons(rfd::MessageButtons::Ok)
         .show();

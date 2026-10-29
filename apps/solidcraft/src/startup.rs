@@ -313,7 +313,7 @@ pub fn max_file_size(value: Option<&str>) -> Result<u64, String> {
 
 /// The message shown when no window could be opened at all.
 pub fn no_window_message(error: &str, settings: Option<&Path>) -> String {
-    let folder = settings.map(|d| d.display().to_string()).unwrap_or_else(|| "the SolidCraft settings folder".into());
+    let folder = settings.map(|d| d.display().to_string()).unwrap_or_else(|| "the Nuclear settings folder".into());
     format!(
         "SolidCraft could not open its window.\n\n{error}\n\n\
          The software renderer was tried too. Things to try:\n\

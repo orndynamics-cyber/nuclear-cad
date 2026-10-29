@@ -32,7 +32,7 @@
   "prefs.logo_theme": "Theme's colours",
   "prefs.max_file_size": "Largest file to open",
   "prefs.max_file_size_design": "Design files",
-  "prefs.max_file_size_flag": "This run started with --max-file-size {size}, which applies until SolidCraft closes. These settings apply when it starts without it.",
+  "prefs.max_file_size_flag": "This run started with --max-file-size {size}, which applies until Nuclear closes. These settings apply when it starts without it.",
   "prefs.max_file_size_note": "Defaults: 512 MB and 256 MB; at most 16 GB. Opening a file takes several times its size in memory. A design that keeps a large import may need a higher design file limit to save and reopen.",
   "prefs.max_file_size_step": "STEP and import files",
   "prefs.max_file_size_web": "The web app opens STEP and import files up to 512 MB and designs up to 256 MB: a browser tab can't hold larger files. The desktop app can raise these limits.",
@@ -171,5 +171,5 @@
   "ui.ribbon_labels": "Show text under ribbon icons",
   "ui.workspace_layout": "Workspace layout",
   "ui.zoom_to_cursor_tip": "The wheel zooms towards the point under the cursor (off: towards the view's centre)",
-  "update.prefs_flatpak": "Flatpak updates this copy ({version}): run {command} or use your software centre. SolidCraft doesn't check."
+  "update.prefs_flatpak": "Flatpak updates this copy ({version}): run {command} or use your software centre. Nuclear doesn't check."
 }

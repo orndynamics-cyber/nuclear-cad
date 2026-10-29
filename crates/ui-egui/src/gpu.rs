@@ -67,7 +67,7 @@ pub(crate) fn tick_tessellation(app: &mut crate::SolveApp) {
         if let Some(gpu) = app.viewport.gpu.as_mut() {
             gpu.tess = true;
             #[cfg(not(target_arch = "wasm32"))]
-            eprintln!("SolidCraft graphics: GPU tessellation ready; bodies are evaluated on the GPU from now on");
+            eprintln!("Nuclear graphics: GPU tessellation ready; bodies are evaluated on the GPU from now on");
         }
     }
 }
@@ -87,7 +87,7 @@ pub fn log_uncaptured_errors(device: &wgpu::Device) {
         if reported.fetch_add(1, Ordering::Relaxed) < 8 {
             log::error!("GPU: {e}");
             #[cfg(not(target_arch = "wasm32"))]
-            eprintln!("SolidCraft graphics: {e}");
+            eprintln!("Nuclear graphics: {e}");
         }
     }));
 }

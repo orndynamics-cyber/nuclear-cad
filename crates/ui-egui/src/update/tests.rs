@@ -64,8 +64,8 @@ fn install_kinds_are_told_apart() {
     assert_eq!(probe("linux", true, &[], home, &[]), InstallKind::LinuxTarball);
 
     let pf = [("ProgramFiles", "C:\\Program Files"), ("ProgramFiles(x86)", "C:\\Program Files (x86)")];
-    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi);
-    assert_eq!(probe("windows", true, &pf, "c:\\program files\\SolidCraft\\solidcraft.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
+    assert_eq!(probe("windows", true, &pf, "C:\\Program Files\\Nuclear\\solidcraft.exe", &[]), InstallKind::WindowsMsi);
+    assert_eq!(probe("windows", true, &pf, "c:\\program files\\Nuclear\\solidcraft.exe", &[]), InstallKind::WindowsMsi, "case-insensitive");
     // "C:\Program Files Extra" is not under "C:\Program Files".
     assert_eq!(probe("windows", true, &pf, "C:\\Program Files Extra\\solidcraft.exe", &[]), InstallKind::WindowsExe);
     let portable = "C:\\Users\\me\\solidcraft-0.10.0-windows-x64-portable\\solidcraft.exe";
@@ -74,11 +74,11 @@ fn install_kinds_are_told_apart() {
     if cfg!(windows) {
         assert_eq!(probe("windows", true, &pf, portable, &[cli]), InstallKind::WindowsPortable);
     }
-    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\SolidCraft-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
+    assert_eq!(probe("windows", true, &pf, "C:\\Users\\me\\Downloads\\Nuclear-0.10.0-windows-x64.exe", &[]), InstallKind::WindowsExe);
 
     assert_eq!(
         probe("macos", true, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]),
-        InstallKind::MacApp("/Applications/SolidCraft.app".into())
+        InstallKind::MacApp("/Applications/Nuclear.app".into())
     );
     assert_eq!(probe("macos", true, &[], "/usr/local/bin/solidcraft", &[]), InstallKind::Other);
     assert_eq!(probe("macos", false, &[], "/Applications/SolidCraft.app/Contents/MacOS/solidcraft", &[]), InstallKind::Dev);
@@ -102,7 +102,7 @@ fn portable_windows_layout_is_recognised() {
 /// beside it as the portable zip does. The folder it recorded is what tells its copy apart.
 #[test]
 fn an_msi_install_outside_program_files_is_recognised() {
-    let exe = PathBuf::from(r"D:\Program Files\SolidCraft\solidcraft.exe");
+    let exe = PathBuf::from(r"D:\Program Files\Nuclear\solidcraft.exe");
     let get = |k: &str| match k {
         "ProgramFiles" | "ProgramW6432" => Some(r"C:\Program Files".to_string()),
         "ProgramFiles(x86)" => Some(r"C:\Program Files (x86)".to_string()),
@@ -119,7 +119,7 @@ fn an_msi_install_outside_program_files_is_recognised() {
     // No installer copy here: the portable zip, as before.
     assert_eq!(kind(None), InstallKind::WindowsPortable);
     assert_eq!(kind(Some("")), InstallKind::WindowsPortable);
-    assert_eq!(kind(Some(r"D:\Program Files\SolidCraft2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
+    assert_eq!(kind(Some(r"D:\Program Files\Nuclear2\")), InstallKind::WindowsPortable, "a folder whose name only starts the same");
 }
 
 /// The assets of v0.10.0, as published.
@@ -130,7 +130,7 @@ fn release() -> Release {
         "solidcraft-0.10.0-linux-x86_64.AppImage.zsync",
         "solidcraft-0.10.0-linux-x86_64.tar.gz",
         "solidcraft-0.10.0-linux-aarch64.tar.gz",
-        "SolidCraft-0.10.0-windows-x64.exe",
+        "Nuclear-0.10.0-windows-x64.exe",
         "solidcraft-linux-aarch64.AppImage",
         "solidcraft-linux-aarch64.deb",
         "solidcraft-linux-x86_64.AppImage",
@@ -148,11 +148,11 @@ fn release() -> Release {
     ];
     let assets: Vec<Value> = names
         .iter()
-        .map(|n| json!({"name": n, "size": 10, "browser_download_url": format!("https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/{n}")}))
+        .map(|n| json!({"name": n, "size": 10, "browser_download_url": format!("https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v0.10.0/{n}")}))
         .collect();
     let body = json!({
-        "tag_name": "v0.10.0", "name": "SolidCraft v0.10.0", "body": "**What's new**\n\n- Surface tools.",
-        "html_url": "https://github.com/bherbruck/solidcraft/releases/tag/v0.10.0", "draft": false, "prerelease": false, "assets": assets,
+        "tag_name": "v0.10.0", "name": "Nuclear v0.10.0", "body": "**What's new**\n\n- Surface tools.",
+        "html_url": "https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v0.10.0", "draft": false, "prerelease": false, "assets": assets,
     });
     Release::parse(body.to_string().as_bytes()).unwrap()
 }
@@ -170,7 +170,7 @@ fn each_installation_gets_its_own_file() {
     assert_eq!(name(InstallKind::WindowsMsi, "aarch64").as_deref(), Some("solidcraft-windows-arm64.msi"));
     assert_eq!(name(InstallKind::WindowsMsi, "x86").as_deref(), Some("solidcraft-windows-x86.msi"));
     assert_eq!(name(InstallKind::WindowsPortable, "x86_64").as_deref(), Some("solidcraft-windows-x64-portable.zip"));
-    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("SolidCraft-0.10.0-windows-x64.exe"));
+    assert_eq!(name(InstallKind::WindowsExe, "x86_64").as_deref(), Some("Nuclear-0.10.0-windows-x64.exe"));
     assert_eq!(name(InstallKind::WindowsExe, "aarch64").as_deref(), Some("solidcraft-windows-arm64-portable.zip"));
     assert_eq!(name(InstallKind::MacApp("/A.app".into()), "aarch64").as_deref(), Some("solidcraft-macos-universal.dmg"));
     assert_eq!(name(InstallKind::Other, "x86_64"), None);
@@ -178,14 +178,14 @@ fn each_installation_gets_its_own_file() {
     // Download: the file, or the page when there is none or a package manager updates it.
     assert_eq!(
         r.download_url(&InstallKind::WindowsMsi, "x86_64"),
-        "https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/solidcraft-windows-x64.msi"
+        "https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v0.10.0/solidcraft-windows-x64.msi"
     );
-    assert_eq!(r.download_url(&InstallKind::Other, "x86_64"), "https://github.com/bherbruck/solidcraft/releases/tag/v0.10.0");
+    assert_eq!(r.download_url(&InstallKind::Other, "x86_64"), "https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v0.10.0");
     assert_eq!(r.download_url(&InstallKind::Flatpak(APP_ID.into()), "x86_64"), r.page);
     assert_eq!(r.download_url(&InstallKind::Snap { store: true }, "x86_64"), r.page);
     assert_eq!(
         r.download_url(&InstallKind::Snap { store: false }, "x86_64"),
-        "https://github.com/bherbruck/solidcraft/releases/download/v0.10.0/solidcraft-linux-x86_64.snap"
+        "https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v0.10.0/solidcraft-linux-x86_64.snap"
     );
     assert_eq!(
         InstallKind::Snap { store: false }.update_command(Some("solidcraft-linux-x86_64.snap")).as_deref(),
@@ -212,7 +212,7 @@ fn release_answers_are_checked() {
     let r = Release::parse(
         json!({"tag_name": "v1.0.0", "html_url": "https://evil.example/x", "assets": [
             {"name": "solidcraft-windows-x64.msi", "browser_download_url": "https://evil.example/a.msi"},
-            {"name": "solidcraft-windows-x86.msi", "browser_download_url": "https://github.com/bherbruck/solidcraft/releases/download/v1.0.0/solidcraft-windows-x86.msi"},
+            {"name": "solidcraft-windows-x86.msi", "browser_download_url": "https://github.com/orndynamics-cyber/nuclear-cad/releases/download/v1.0.0/solidcraft-windows-x86.msi"},
         ]})
         .to_string()
         .as_bytes(),
@@ -220,7 +220,7 @@ fn release_answers_are_checked() {
     .unwrap();
     assert_eq!(r.page, RELEASES_PAGE);
     assert_eq!(r.assets.len(), 1);
-    assert_eq!(r.name, "SolidCraft v1.0.0");
+    assert_eq!(r.name, "Nuclear v1.0.0");
     // Huge notes are cut (on a character boundary).
     let r = Release::parse(json!({"tag_name": "v1.0.0", "body": "é".repeat(MAX_NOTES)}).to_string().as_bytes()).unwrap();
     assert!(r.notes.len() <= MAX_NOTES + 8 && r.notes.ends_with('…'));
@@ -305,9 +305,9 @@ fn next_release_feed(dir: &Path) -> (PathBuf, String) {
     let path = dir.join("latest.json");
     let body = json!({
         "tag_name": format!("v{v}"),
-        "name": format!("SolidCraft {v}"),
+        "name": format!("Nuclear {v}"),
         "body": "## What's new\n\n- Faster rebuilds.",
-        "html_url": format!("https://github.com/bherbruck/solidcraft/releases/tag/v{v}"),
+        "html_url": format!("https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v{v}"),
         "assets": []
     });
     std::fs::write(&path, body.to_string()).unwrap();
@@ -442,7 +442,7 @@ fn the_memo_survives_with_the_preferences() {
 
 #[test]
 fn release_notes_read_as_markdown() {
-    let md = "## What's new\n\n**Why 0.10:** a minor\nbump.\n\n- **Surface tools.** Revolve and `solidcraft-cli mcp`\n  continued ([#925](https://x/925)).\n  - nested\n* Fix by @a in https://github.com/bherbruck/solidcraft/pull/1064\n\nSee https://example.com/x.";
+    let md = "## What's new\n\n**Why 0.10:** a minor\nbump.\n\n- **Surface tools.** Revolve and `solidcraft-cli mcp`\n  continued ([#925](https://x/925)).\n  - nested\n* Fix by @a in https://github.com/orndynamics-cyber/nuclear-cad/pull/1064\n\nSee https://example.com/x.";
     let b = parse_markdown(md);
     assert_eq!(b.first(), Some(&Block::Heading(vec![Span::Text("What's new".into())])));
     assert_eq!(b.get(1), Some(&Block::Paragraph(vec![Span::Strong("Why 0.10:".into()), Span::Text(" a minor bump.".into())])));
@@ -467,7 +467,7 @@ fn release_notes_read_as_markdown() {
             0,
             vec![
                 Span::Text("Fix by @a in ".into()),
-                Span::Link { text: "#1064".into(), url: Some("https://github.com/bherbruck/solidcraft/pull/1064".into()) }
+                Span::Link { text: "#1064".into(), url: Some("https://github.com/orndynamics-cyber/nuclear-cad/pull/1064".into()) }
             ]
         ))
     );
@@ -502,32 +502,32 @@ fn releases_under_either_owner_are_accepted() {
         )
         .unwrap()
     };
-    for owner in ["bherbruck/solidcraft", "tangency-labs/solidcraft"] {
+    for owner in ["orndynamics-cyber/nuclear-cad"] {
         let r = parse(owner);
         assert_eq!(r.page, format!("https://github.com/{owner}/releases/tag/v1.0.0"));
         assert_eq!(r.assets.len(), 1, "{owner}");
     }
     // Any other owner, repository, host or scheme is dropped.
-    for owner in ["evil/solidcraft", "tangency-labs/solidcraft-evil", "tangency-labs.evil/solidcraft", "bherbruck/other"] {
+    for owner in ["evil/nuclear-cad", "orndynamics-cyber/nuclear-cad-evil", "orndynamics-cyber.evil/nuclear-cad", "tangency-labs/solidcraft", "bherbruck/solidcraft"] {
         let r = parse(owner);
         assert_eq!(r.page, RELEASES_PAGE, "{owner}");
         assert!(r.assets.is_empty(), "{owner}");
     }
-    assert!(!is_release_url("http://github.com/tangency-labs/solidcraft/releases/x"));
-    assert!(!is_release_url("https://github.com.evil.example/tangency-labs/solidcraft/releases/x"));
-    assert!(!is_release_url("https://github.com/tangency-labs/solidcraft/issues/1"));
+    assert!(!is_release_url("http://github.com/orndynamics-cyber/nuclear-cad/releases/x"));
+    assert!(!is_release_url("https://github.com.evil.example/orndynamics-cyber/nuclear-cad/releases/x"));
+    assert!(!is_release_url("https://github.com/orndynamics-cyber/nuclear-cad/issues/1"));
 }
 
 #[test]
 fn the_version_links_to_its_release_notes() {
     // A release build opens the page of its own release; stable, candidate and nightly tags all exist.
     for v in ["0.17.0", "0.21.0-rc.2", "0.20.0-nightly.20261023.69.1"] {
-        assert_eq!(release_notes_url(v, true), format!("https://github.com/tangency-labs/solidcraft/releases/tag/v{v}"));
+        assert_eq!(release_notes_url(v, true), format!("https://github.com/orndynamics-cyber/nuclear-cad/releases/tag/v{v}"));
     }
     // A development build has no release of its own: the release history, which is what the issue asks for.
-    assert_eq!(release_notes_url("0.17.0", false), "https://github.com/tangency-labs/solidcraft/releases");
+    assert_eq!(release_notes_url("0.17.0", false), "https://github.com/orndynamics-cyber/nuclear-cad/releases");
     // Anything that is not a version never ends up in a URL.
-    assert_eq!(release_notes_url("0.1/../../x", true), "https://github.com/tangency-labs/solidcraft/releases");
+    assert_eq!(release_notes_url("0.1/../../x", true), "https://github.com/orndynamics-cyber/nuclear-cad/releases");
 }
 
 #[test]
@@ -622,21 +622,21 @@ fn the_record_matches_folders_bundles_and_windows_paths() {
     let home = |k: &str| (k == "HOME").then(|| "/home/me/.local/share/artcraft-launcher/apps/solidcraft/home".to_string());
     assert_eq!(managed_by("linux", &home, Some(exe), &InstallKind::LinuxTarball, &read).as_deref(), Some("ArtCraft Launcher"));
     // macOS: the bundle.
-    let bundle = PathBuf::from("/Applications/SolidCraft.app");
+    let bundle = PathBuf::from("/Applications/Nuclear.app");
     let mac = InstallKind::MacApp(bundle.clone());
     let exe = Path::new("/Applications/SolidCraft.app/Contents/MacOS/solidcraft");
     let home = |k: &str| (k == "HOME").then(|| "/Users/me".to_string());
     let read = |p: &Path| {
         assert_eq!(p, Path::new("/Users/me/Library/Application Support/ArtCraft Launcher/installed.json"));
-        Some(record("/Applications/SolidCraft.app"))
+        Some(record("/Applications/Nuclear.app"))
     };
     assert_eq!(managed_by("macos", &home, Some(exe), &mac, &read).as_deref(), Some("ArtCraft Launcher"));
     // Windows: case and the verbatim prefix don't matter, and the record is under LOCALAPPDATA.
     let local = |k: &str| (k == "LOCALAPPDATA").then(|| r"C:\Users\me\AppData\Local".to_string());
-    let exe = Path::new(r"C:\Users\me\AppData\Local\Programs\SolidCraft\solidcraft.exe");
+    let exe = Path::new(r"C:\Users\me\AppData\Local\Programs\Nuclear\solidcraft.exe");
     let read = nothing_else(record(r"\\?\c:\users\me\appdata\local\programs\solidcraft\SOLIDCRAFT.EXE"));
     assert_eq!(managed_by("windows", &local, Some(exe), &InstallKind::WindowsExe, &read).as_deref(), Some("ArtCraft Launcher"));
-    let read = nothing_else(record(r"C:\Users\me\AppData\Local\Programs\SolidCraft2"));
+    let read = nothing_else(record(r"C:\Users\me\AppData\Local\Programs\Nuclear2"));
     assert_eq!(managed_by("windows", &local, Some(exe), &InstallKind::WindowsExe, &read), None, "a folder whose name only starts the same");
     // Linux paths are case-sensitive.
     let read = nothing_else(record("/OPT/SC"));
@@ -668,7 +668,7 @@ fn open_update_window(managed: Option<&str>) -> (crate::scenario::Harness, Scrat
 fn a_managed_install_points_to_its_manager_instead_of_updating_itself() {
     let (mut h, _dir) = open_update_window(Some("ArtCraft Launcher"));
     assert_eq!(install_method(&mut h.app), None, "no AppImage self-replace");
-    assert!(h.widget("Update available: update SolidCraft in ArtCraft Launcher").is_some());
+    assert!(h.widget("Update available: update Nuclear in ArtCraft Launcher").is_some());
     for gone in ["Update now", "Download", "Open release page"] {
         assert!(h.widget(gone).is_none(), "{gone} is not offered");
     }
@@ -684,5 +684,5 @@ fn an_unmanaged_install_updates_itself_as_before() {
     assert_eq!(install_method(&mut h.app), Some(install::Method::AppImage("/home/me/SolidCraft.AppImage".into())));
     assert!(h.widget("Update now").is_some());
     assert!(h.widget("Download").is_some());
-    assert!(h.widget("Update available: update SolidCraft in ArtCraft Launcher").is_none());
+    assert!(h.widget("Update available: update Nuclear in ArtCraft Launcher").is_none());
 }

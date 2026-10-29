@@ -130,7 +130,7 @@ pub fn relaunch_after(installer: &Path, args: &[String], exe: &Path) -> (PathBuf
 pub fn verify_signature(sums: &[u8], signature: &str, key: &str, tag: &str) -> Result<(), String> {
     let key = minisign_verify::PublicKey::from_base64(key.trim()).map_err(|e| format!("update signing key: {e}"))?;
     let sig = minisign_verify::Signature::decode(signature).map_err(|e| format!("{SUMS_SIG}: {e}"))?;
-    key.verify(sums, &sig, false).map_err(|e| format!("{SUMS} isn't signed by SolidCraft's release key: {e}"))?;
+    key.verify(sums, &sig, false).map_err(|e| format!("{SUMS} isn't signed by Nuclear's release key: {e}"))?;
     // The comment is covered by the signature: an older release's signed list can't stand in.
     let comment = sig.trusted_comment();
     if !comment.split_whitespace().any(|w| w == tag) {

@@ -29,18 +29,17 @@ use crate::theme::Tokens;
 use crate::ui_kit;
 
 /// The repository releases come from.
-pub const REPO: &str = "tangency-labs/solidcraft";
+pub const REPO: &str = "orndynamics-cyber/nuclear-cad";
 /// The one request an update check makes.
-pub const LATEST_API: &str = "https://api.github.com/repos/tangency-labs/solidcraft/releases/latest";
+pub const LATEST_API: &str = "https://api.github.com/repos/orndynamics-cyber/nuclear-cad/releases/latest";
 /// Where Download goes when no package fits this installation.
-pub const RELEASES_PAGE: &str = "https://github.com/tangency-labs/solidcraft/releases/latest";
-/// Release pages and assets must be on GitHub, under this repository. The repository moved to the
-/// `tangency-labs` organisation, so releases may still name either owner (older releases and the
-/// links GitHub redirects keep the old one).
-const RELEASE_PREFIXES: [&str; 2] = ["https://github.com/bherbruck/solidcraft/releases/", "https://github.com/tangency-labs/solidcraft/releases/"];
+pub const RELEASES_PAGE: &str = "https://github.com/orndynamics-cyber/nuclear-cad/releases/latest";
+/// Release pages and assets must be on GitHub, under this repository. Nuclear updates only from its
+/// own releases, never from upstream SolidCraft's.
+const RELEASE_PREFIXES: [&str; 1] = ["https://github.com/orndynamics-cyber/nuclear-cad/releases/"];
 
-/// A release page or asset URL: github.com, one of the two owners, exactly `solidcraft`, then
-/// `/releases/` (the trailing slash rules out look-alike names such as `solidcraft-evil`).
+/// A release page or asset URL: github.com, this owner, exactly `nuclear-cad`, then `/releases/`
+/// (the trailing slash rules out look-alike names such as `nuclear-cad-evil`).
 fn is_release_url(url: &str) -> bool {
     RELEASE_PREFIXES.iter().any(|p| url.starts_with(p))
 }
@@ -110,7 +109,7 @@ pub fn comparable(v: &semver::Version) -> semver::Version {
 /// candidate and nightly releases are all tagged `v<version>`), else, for a development build or
 /// a string that is not a version, the release history.
 pub fn release_notes_url(version: &str, release_build: bool) -> String {
-    const HISTORY: &str = "https://github.com/tangency-labs/solidcraft/releases";
+    const HISTORY: &str = "https://github.com/orndynamics-cyber/nuclear-cad/releases";
     if release_build && parse_version(version).is_some() && version.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '+')) {
         format!("{HISTORY}/tag/v{version}")
     } else {
@@ -273,7 +272,7 @@ pub fn this_install() -> InstallKind {
 /// The folder the Windows installer recorded (solidcraft.wxs writes it for upgrades), if any.
 #[cfg(windows)]
 fn msi_install_dir() -> Option<PathBuf> {
-    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\SolidCraft").ok()?;
+    let key = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE).open_subkey(r"Software\Nuclear").ok()?;
     key.get_value::<String, _>("InstallDir").ok().map(PathBuf::from)
 }
 
@@ -461,7 +460,7 @@ pub fn asset_name(kind: &InstallKind, arch: &str, version: &str) -> Option<Strin
         InstallKind::WindowsMsi => format!("solidcraft-windows-{}.msi", windows?),
         InstallKind::WindowsPortable => format!("solidcraft-windows-{}-portable.zip", windows?),
         // Only x64 has the lone .exe; elsewhere the portable zip is the same thing.
-        InstallKind::WindowsExe if windows == Some("x64") => format!("SolidCraft-{version}-windows-x64.exe"),
+        InstallKind::WindowsExe if windows == Some("x64") => format!("Nuclear-{version}-windows-x64.exe"),
         InstallKind::WindowsExe => format!("solidcraft-windows-{}-portable.zip", windows?),
         InstallKind::MacApp(_) => "solidcraft-macos-universal.dmg".into(),
         InstallKind::Dev | InstallKind::Web | InstallKind::Other => return None,
@@ -525,7 +524,7 @@ impl Release {
             })
             .collect();
         Ok(Release {
-            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("SolidCraft {tag}")),
+            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("Nuclear {tag}")),
             tag,
             notes,
             page,

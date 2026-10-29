@@ -119,50 +119,24 @@ pub(crate) fn brand_mark_silhouette(p: &egui::Painter, c: Pos2, height: f32, ink
 }
 
 fn brand_mark_styled(p: &egui::Painter, c: Pos2, height: f32, colours: [Color32; 3], edges: bool) {
-    let s = height / 412.217;
-    let m = |pts: &[(f32, f32)]| -> Vec<egui::Pos2> { pts.iter().map(|&(x, y)| pos2(c.x + (x - 178.5) * s, c.y + (y - 206.1) * s)).collect() };
-    // egui only fills convex shapes, so each face is a few overlapping convex pieces.
-    let face = |col: Color32, pts: &[(f32, f32)]| {
-        p.add(egui::Shape::convex_polygon(m(pts), col, Stroke::NONE));
-    };
-    // The faces are separated by gaps that show the application bar, not by white lines.
+    // The Nuclear mark: three electron orbits at 0, 60 and 120 degrees around a nucleus, drawn
+    // in code. Each orbit takes one of the logo's three tones; the silhouette uses one ink.
     let [light, mid, dark] = colours;
-    let edge_col = crate::theme::Tokens::get().app_bar;
-    face(light, &[(3.5, 105.9), (177.0, 5.8), (263.4, 55.6), (263.8, 156.0), (177.0, 406.4)]);
-    face(light, &[(177.0, 206.1), (263.8, 156.0), (350.5, 206.2), (350.5, 306.3), (177.0, 406.4)]);
-    face(mid, &[(3.5, 105.9), (177.0, 206.1), (177.0, 406.4)]);
-    face(mid, &[(3.5, 105.9), (3.5, 205.7), (90.3, 256.2), (177.0, 206.1)]);
-    face(mid, &[(177.0, 206.1), (90.3, 256.2), (90.0, 356.2), (177.0, 406.4)]);
-    face(dark, &[(264.1, 155.8), (177.0, 206.1), (177.0, 406.4), (263.8, 256.2)]);
-    face(dark, &[(263.8, 256.2), (350.5, 206.2), (350.5, 306.3), (177.0, 406.4)]);
-    face(dark, &[(177.0, 206.1), (177.0, 406.4), (350.5, 306.3)]);
-    face(dark, &[(263.8, 55.9), (263.8, 156.0), (177.1, 105.9)]);
-    if !edges {
-        return;
+    let (a, b) = (height * 0.5, height * 0.19);
+    let width = if edges { (height * 0.085).max(1.2) } else { (height * 0.07).max(1.0) };
+    for (k, col) in [light, mid, dark].into_iter().enumerate() {
+        let turn = k as f32 * std::f32::consts::PI / 3.0;
+        let (sin, cos) = turn.sin_cos();
+        let pts: Vec<Pos2> = (0..48)
+            .map(|i| {
+                let t = i as f32 / 48.0 * std::f32::consts::TAU;
+                let (x, y) = (a * t.cos(), b * t.sin());
+                pos2(c.x + x * cos - y * sin, c.y + x * sin + y * cos)
+            })
+            .collect();
+        p.add(egui::Shape::closed_line(pts, Stroke::new(width, col)));
     }
-    // The seams between the faces and around the mark, in the bar's colour, so they read as gaps.
-    let edge = Stroke::new(10.0 * s, edge_col);
-    let line = |pts: &[(f32, f32)]| {
-        p.add(egui::Shape::line(m(pts), edge));
-    };
-    line(&[(263.8, 55.9), (177.1, 105.9), (263.8, 156.0), (263.8, 256.2), (350.6, 206.1)]);
-    line(&[(5.0, 105.9), (178.5, 206.1), (178.5, 406.4)]);
-    line(&[(177.0, 206.1), (263.8, 156.0)]);
-    p.add(egui::Shape::closed_line(
-        m(&[
-            (178.5, 5.8),
-            (5.0, 105.9),
-            (5.0, 206.1),
-            (91.7, 256.2),
-            (91.7, 356.4),
-            (178.5, 406.4),
-            (352.0, 306.3),
-            (352.0, 206.1),
-            (265.2, 156.0),
-            (265.2, 55.9),
-        ]),
-        edge,
-    ));
+    p.circle_filled(c, height * 0.12, light);
 }
 
 pub(crate) fn cross(p: &egui::Painter, r: Rect, s: Stroke) {

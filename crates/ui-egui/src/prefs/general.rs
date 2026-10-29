@@ -33,7 +33,7 @@ pub(super) fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
         ui_kit::settings_block(ui, app.tr_label("Reopen designs"), labels, |ui| {
             ui_kit::checkbox(
                 ui,
-                crate::i18n::tr_label("Reopen the designs that were open when SolidCraft was last closed"),
+                crate::i18n::tr_label("Reopen the designs that were open when Nuclear was last closed"),
                 &mut app.preferences.reopen_designs,
             );
         });

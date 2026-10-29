@@ -314,8 +314,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
         let left = r.left() + if app.integrated_titlebar { crate::titlebar::TRAFFIC_LIGHTS } else { 0.0 };
         // Keep the current header controls and product name when merging the new mark.
         let compact_actions = r.right() - left < 640.0;
-        // Brand mark: the SolidCraft logo, drawn in code from the SVG's own coordinates
-        // (viewBox 357 x 412). Same 20 px height and centre as the old block.
+        // Brand mark: the Nuclear atom, drawn in code (icons::glyphs::brand_mark), 20 px high.
         {
             let c = pos2(left + 20.0, r.center().y);
             crate::icons::glyphs::brand_mark(ui.painter(), c);
@@ -324,7 +323,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
             ui.painter().text(
                 pos2(left + 36.0, r.center().y),
                 Align2::LEFT_CENTER,
-                "SolidCraft",
+                "Nuclear",
                 crate::fonts::semibold(t.font_heading),
                 t.app_bar_text,
             );
