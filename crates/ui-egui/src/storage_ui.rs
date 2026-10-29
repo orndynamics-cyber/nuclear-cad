@@ -215,7 +215,7 @@ fn retention_impact(app: &mut SolveApp) -> Option<String> {
         return None;
     }
     let list = gone.iter().map(|n| format!("V{n}")).collect::<Vec<_>>().join(", ");
-    Some(crate::i18n::format("storage.versions_impact", &[("count", &gone.len().to_string()), ("versions", &list)]))
+    Some(crate::i18n::format("storage.versions_impact", &[("versions", &list)]))
 }
 
 /// Open the Version History window on the open design's file.
