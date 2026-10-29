@@ -605,6 +605,7 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
         && !app.prefs_window.open
         && !app.help.about
         && !app.crashes.open
+        && !app.storage.open
         && !app.help.menu
         && !egui::Popup::is_any_open(ui.ctx())
         && app.issue_report.draft.is_none()
@@ -750,7 +751,16 @@ fn content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction
                 Section::Recovery => (app.tr_label("Recover"), app.tr("home.recovery_hint")),
                 Section::Export => (app.tr("home.export"), app.tr("home.export_hint")),
             };
-            FileView::title(ui, title);
+            if app.home.section == Section::Start && !cfg!(target_arch = "wasm32") {
+                // Where new designs are saved, right beside Start.
+                ui.horizontal(|ui| {
+                    FileView::title_fit(ui, title);
+                    ui.add_space(t.space_12);
+                    crate::storage_ui::button(app, ui);
+                });
+            } else {
+                FileView::title(ui, title);
+            }
             ui.add_space(t.space_6);
             FileView::subtitle(ui, hint);
             ui.add_space(t.file_section_gap);
@@ -1000,6 +1010,12 @@ fn export_content(app: &SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAct
             });
         }
     });
+}
+
+/// Open the start page on its Recover section (the Storage window's link to it).
+pub(crate) fn show_recovery(app: &mut SolveApp, ctx: &egui::Context) {
+    app.home.open = true;
+    dispatch(app, ctx, FileAction::Section(Section::Recovery));
 }
 
 fn dispatch(app: &mut SolveApp, ctx: &egui::Context, action: FileAction) {

@@ -160,6 +160,7 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context, anchor: egui::Pos2) {
     about(app, ctx);
     connect(app, ctx);
     crate::crash_ui::show(app, ctx);
+    crate::storage_ui::show(app, ctx);
     crate::messages::show(app, ctx);
 }
 
