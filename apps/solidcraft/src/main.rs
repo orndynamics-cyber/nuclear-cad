@@ -24,6 +24,8 @@ mod come_forward;
 mod control_server;
 mod device_lost;
 #[cfg(target_os = "windows")]
+mod known_folders;
+#[cfg(target_os = "windows")]
 mod native_crash;
 #[cfg(target_os = "macos")]
 mod native_crash_macos;
@@ -159,6 +161,7 @@ impl eframe::App for App {
         }
         self.solve.logic(ctx);
         self.dialog_folder.design(self.solve.session.path.as_deref());
+        self.dialog_folder.library(solidcraft_ui_egui::storage_ui::dialog_folder(&self.solve));
         #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
         if !self.solve.file_picker_busy() {
             self.space_mouse.tick(&mut self.solve, ctx);
@@ -264,6 +267,8 @@ struct DialogFolderState {
     folder: Option<std::path::PathBuf>,
     /// The open design's path when last looked at, to notice another design opened or saved.
     design: Option<String>,
+    /// The project library: where a dialog opens before any folder was chosen.
+    library: Option<std::path::PathBuf>,
 }
 
 impl DialogFolder {
@@ -294,8 +299,17 @@ impl DialogFolder {
         Some(picked.path().to_string_lossy().into_owned())
     }
 
+    /// The project library, every frame (the Storage window can change it).
+    fn library(&self, library: Option<std::path::PathBuf>) {
+        if let Ok(mut state) = self.0.lock()
+            && state.library != library
+        {
+            state.library = library;
+        }
+    }
+
     fn folder(&self) -> Option<std::path::PathBuf> {
-        self.0.lock().ok().and_then(|state| state.folder.clone())
+        self.0.lock().ok().and_then(|state| state.folder.clone().or_else(|| state.library.clone()))
     }
 
     /// The dialog, opening in the remembered folder when there is one.
@@ -361,6 +375,7 @@ fn services(cc: &eframe::CreationContext<'_>, folder: &DialogFolder) -> Services
     let open_parent = parent.clone();
     let program_parent = parent.clone();
     let file_parent = parent.clone();
+    let folder_parent = parent.clone();
     let (open_folder, file_folder, save_folder) = (folder.clone(), folder.clone(), folder.clone());
     Services {
         pick_open: Some(Box::new(move |first: &[&str]| {
@@ -397,6 +412,10 @@ fn services(cc: &eframe::CreationContext<'_>, folder: &DialogFolder) -> Services
             let future = file_folder.start(file_parent.clone()).add_filter(label, &all).add_filter("All files", &["*"]).pick_file();
             let folder = file_folder.clone();
             Box::pin(async move { folder.answer(future.await) })
+        })),
+        pick_folder: Some(Box::new(move || {
+            let future = folder_parent.clone().pick_folder();
+            Box::pin(async move { future.await.map(|p| p.path().to_string_lossy().into_owned()) })
         })),
         pick_program: Some(Box::new(move || {
             let dialog = program_parent.clone().set_title("Choose your slicer");
@@ -956,6 +975,13 @@ fn main() -> eframe::Result {
             {
                 app.set_status(format!("--theme-file: {e}"), true);
             }
+            // The project library: Documents/Nuclear Projects made on the first launch, or the
+            // folder the Storage window chose, checked off the window thread.
+            #[cfg(target_os = "windows")]
+            {
+                app.storage.documents = solidcraft_engine::storage::documents_dir().or_else(known_folders::documents);
+            }
+            solidcraft_ui_egui::storage_ui::prepare(&mut app);
             mark("app state and prefs");
             let gpu = cc.wgpu_render_state.as_ref().map(|rs| LostWatch {
                 lost: rs.device_lost.clone(),

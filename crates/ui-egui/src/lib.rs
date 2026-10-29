@@ -269,6 +269,7 @@ pub mod space_mouse_model;
 pub mod space_mouse_offer;
 pub mod stand_up;
 mod status_bar;
+pub mod storage_ui;
 #[cfg(test)]
 mod sweep_dialog_tests;
 pub(crate) mod test_boat;
@@ -397,6 +398,8 @@ pub struct Services {
     /// Open a dialog asking for a program (a slicer); `None` when the host has no such dialog.
     pub pick_program: Option<Box<dyn Fn() -> FilePickerFuture>>,
     pub show_in_folder: Option<Box<dyn Fn(&str)>>,
+    /// Ask for a folder (the project library); `None` when the host has no such dialog.
+    pub pick_folder: Option<Box<dyn Fn() -> FilePickerFuture>>,
     /// Where the host reads the anti-aliasing preference at start (a small JSON file).
     pub graphics_path: Option<String>,
     /// Linux: the window system this run uses, `wayland` or `x11` (Preferences shows it, #3083).
@@ -578,6 +581,8 @@ pub struct SolveApp {
     pub network_prompt: Option<network_prompt::NetworkPrompt>,
     /// Designs left by crashed apps, offered for recovery.
     pub recoverable: Vec<solidcraft_engine::recovery::Entry>,
+    /// The project library new designs are saved in, and its Storage window.
+    pub storage: storage_ui::Storage,
     /// The bodies of a just-opened Y-up file, offered to be stood up (`stand_up`).
     pub stand_up: Option<Vec<String>>,
     /// The placement of the component that file came in as: the offer turns it.
@@ -761,6 +766,7 @@ impl SolveApp {
             disk_prompt: false,
             network_prompt: None,
             recoverable: Vec::new(),
+            storage: Default::default(),
             stand_up: None,
             stand_up_occurrence: None,
             stand_up_reason: false,

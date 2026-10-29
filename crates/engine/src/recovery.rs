@@ -120,6 +120,14 @@ fn design_file(dir: &Path, id: &str) -> PathBuf {
     solidcraft_io::DESIGN_EXTS.iter().map(|ext| file(dir, id, ext)).find(|p| p.is_file()).unwrap_or_else(|| file(dir, id, solidcraft_io::DESIGN_EXT))
 }
 
+/// The previous checkpoint, kept while a newer one replaces it (`<id>.sc.bak`).
+const PREVIOUS: &str = "sc.bak";
+
+/// The files an entry has, besides its lock.
+fn entry_exts() -> impl Iterator<Item = &'static str> {
+    ["json", PREVIOUS].into_iter().chain(solidcraft_io::DESIGN_EXTS)
+}
+
 fn file(dir: &Path, id: &str, ext: &str) -> PathBuf {
     dir.join(format!("{id}.{ext}"))
 }
@@ -161,10 +169,22 @@ pub fn load(dir: &Path, id: &str) -> Result<(Document, Entry)> {
         return Err(EngineError::Other(format!("no recovered design `{id}`")));
     }
     let entry = read_entry(&file(dir, id, "json")).filter(|e| e.id == id).ok_or_else(|| EngineError::Other(format!("no recovered design `{id}`")))?;
-    let path = design_file(dir, id);
-    let bytes = solidcraft_io::limits::read(&path.to_string_lossy(), solidcraft_io::limits::Kind::Design)
-        .map_err(|e| EngineError::Other(format!("recovered design `{id}`: {e}")))?;
-    Ok((solidcraft_io::read_design(&bytes)?, entry))
+    let read = |path: &Path| -> Result<Document> {
+        let bytes = solidcraft_io::limits::read(&path.to_string_lossy(), solidcraft_io::limits::Kind::Design)
+            .map_err(|e| EngineError::Other(format!("recovered design `{id}`: {e}")))?;
+        Ok(solidcraft_io::read_design(&bytes)?)
+    };
+    match read(&design_file(dir, id)) {
+        Ok(doc) => Ok((doc, entry)),
+        // A damaged checkpoint: the one before it, when there is one.
+        Err(e) => match read(&file(dir, id, PREVIOUS)) {
+            Ok(doc) => {
+                log::warn!("recovery: `{id}` was damaged ({e}); opening the checkpoint before it");
+                Ok((doc, entry))
+            }
+            Err(_) => Err(e),
+        },
+    }
 }
 
 /// Delete an entry. Only a real one: `<id>.json` must describe entry `id` and its design must
@@ -174,7 +194,7 @@ pub fn remove(dir: &Path, id: &str) -> Result<()> {
     if !is_entry {
         return Err(EngineError::Other(format!("no recovered design `{id}`")));
     }
-    for ext in ["json", "lock"].into_iter().chain(solidcraft_io::DESIGN_EXTS) {
+    for ext in entry_exts().chain(["lock"]) {
         let _ = fs::remove_file(file(dir, id, ext));
     }
     Ok(())
@@ -234,7 +254,10 @@ impl Snapshot {
             doc.visibility = self.visibility.clone();
             solidcraft_io::write_design_container(&doc)?
         };
-        solidcraft_io::write_atomic(&file(&self.dir, &self.id, solidcraft_io::DESIGN_EXT), &bytes, false).map_err(io)?;
+        // Check the new checkpoint opens before it replaces the last one, which is kept as the
+        // previous checkpoint (`<id>.sc.bak`): one step of rotation, never more.
+        solidcraft_io::read_design(&bytes).map_err(|e| EngineError::Other(format!("autosave: the checkpoint does not open: {e}")))?;
+        solidcraft_io::write_atomic(&file(&self.dir, &self.id, solidcraft_io::DESIGN_EXT), &bytes, true).map_err(io)?;
         let entry = Entry {
             id: self.id.clone(),
             path: self.path.clone(),
@@ -329,7 +352,7 @@ impl Autosaver {
         self.last_at = Instant::now();
         if !s.is_dirty() {
             if self.has_entry {
-                for ext in ["json"].into_iter().chain(solidcraft_io::DESIGN_EXTS) {
+                for ext in entry_exts() {
                     let _ = fs::remove_file(file(&self.dir, &self.id, ext));
                 }
                 self.has_entry = false;
@@ -385,7 +408,7 @@ impl Autosaver {
         if let Some(w) = self.writing.take() {
             let _ = w.done.recv();
         }
-        for ext in ["json"].into_iter().chain(solidcraft_io::DESIGN_EXTS) {
+        for ext in entry_exts() {
             let _ = fs::remove_file(file(&self.dir, &self.id, ext));
         }
         self.lock = None;
@@ -593,6 +616,52 @@ mod tests {
         b.close(&s);
         assert_eq!(orphans(&d).len(), 1);
         assert!(load(&d, "../etc").is_err());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    /// Autosave keeps one previous checkpoint, opens it when the newest is damaged, never writes
+    /// the design's own file (or its folder, which may be synced), and a save that fails leaves
+    /// the checkpoint in place.
+    #[test]
+    fn checkpoints_rotate_once_fall_back_when_damaged_and_never_touch_the_design_file() {
+        let d = dir("rotate");
+        let project = d.join("Synced project");
+        fs::create_dir_all(&project).unwrap();
+        let design = project.join("Bracket.sc");
+        let mut s = Session::default();
+        s.execute("solid.box", &json!({"length": 10, "width": 10, "height": 10})).unwrap();
+        s.execute("file.save_as", &json!({"path": design})).unwrap();
+        let saved = fs::read(&design).unwrap();
+        let listing = |dir: &Path| fs::read_dir(dir).unwrap().flatten().map(|e| e.file_name()).collect::<std::collections::BTreeSet<_>>();
+        let project_files = listing(&project);
+        let mut a = Autosaver::new(&d, Duration::ZERO).unwrap();
+        for size in [5, 6, 7] {
+            s.execute("solid.box", &json!({"length": size, "width": size, "height": size})).unwrap();
+            assert!(a.save(&s).unwrap());
+        }
+        assert_eq!(fs::read(&design).unwrap(), saved, "autosave never writes the design's file");
+        assert_eq!(listing(&project), project_files, "nor anything beside it");
+        let previous = file(&d, &a.id, PREVIOUS);
+        assert!(previous.is_file());
+        let entry_files = fs::read_dir(&d).unwrap().flatten().filter(|e| e.file_name().to_string_lossy().starts_with(&a.id)).count();
+        assert_eq!(entry_files, 4, "design, previous checkpoint, metadata, lock: no pile of old checkpoints");
+
+        // A save that fails keeps the recovery entry.
+        let blocked = d.join("blocked");
+        fs::write(&blocked, b"a file, not a folder").unwrap();
+        assert!(s.execute("file.save_as", &json!({"path": blocked.join("Bracket.sc")})).is_err());
+        assert!(s.is_dirty());
+        assert!(!a.save(&s).unwrap(), "unchanged since the last checkpoint");
+        assert!(file(&d, &a.id, solidcraft_io::DESIGN_EXT).is_file());
+
+        // The app dies; the newest checkpoint is damaged on disk: the one before it opens.
+        let id = a.id.clone();
+        drop(a);
+        fs::write(file(&d, &id, solidcraft_io::DESIGN_EXT), b"damaged").unwrap();
+        let (doc, _) = load(&d, &id).unwrap();
+        assert_eq!(doc.features.len(), 3, "the checkpoint before the last: the saved box and the next two");
+        remove(&d, &id).unwrap();
+        assert!(!previous.exists(), "discarding removes the previous checkpoint too");
         let _ = fs::remove_dir_all(&d);
     }
 

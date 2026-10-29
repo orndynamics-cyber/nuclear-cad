@@ -61,6 +61,7 @@ raw-window-handle = "0.6"
 # The window's resize border, DPI size and class icon (src/native_frame.rs): the window procedure, hit
 # test, DPI, the exe's icon.
 # Finding 3D mice through Plug and Play without asking other devices anything (src/space_mouse/windows_hid.rs).
+# The Documents folder for the project library, even when redirected to OneDrive (src/known_folders.rs).
 windows-sys = { version = "0.61", features = [
     "Win32_Devices_DeviceAndDriverInstallation",
     "Win32_Devices_HumanInterfaceDevice",
@@ -69,6 +70,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_Graphics_Gdi",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_System_Com",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_IO",
     "Win32_System_Kernel",
@@ -76,6 +78,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Memory",
     "Win32_System_Threading",
     "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

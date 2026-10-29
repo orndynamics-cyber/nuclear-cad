@@ -941,6 +941,13 @@ preference_settings! {
     reopen_designs: bool = true, PAGE_GENERAL;
     /// Those designs' files, in tab order, as the last quit left them.
     open_designs: Vec<String> = Vec::new(), PAGE_GENERAL;
+    /// What kind of folder the project library is: `local` or `synced` (`storage::Kind`). Set
+    /// in the Storage window beside Start; no page's reset changes where designs are saved.
+    storage_kind: String = "local".into();
+    /// The project library chosen in the Storage window; empty: Documents/Nuclear Projects.
+    storage_folder: String = String::new();
+    /// Ordinary versions Save keeps of each design (0: all); protected versions are kept besides.
+    versions_keep: u32 = 20, PAGE_GENERAL;
     /// The largest STEP or import file opened, in MB (#4086): from the default (512) up to 16 GB.
     /// `--max-file-size` overrides it for one run. The browser keeps the default.
     max_step_file_mb: u64 = DEFAULT_STEP_MB, PAGE_GENERAL;

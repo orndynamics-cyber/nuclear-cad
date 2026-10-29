@@ -116,6 +116,14 @@ impl FileView {
         ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(rect.min, galley, t.form_ink);
     }
 
+    /// [`Self::title`] only as wide as its text, so a control can sit beside it.
+    pub(crate) fn title_fit(ui: &mut Ui, title: &str) {
+        let t = Tokens::get();
+        let galley = ui.painter().layout_no_wrap(title.to_owned(), crate::fonts::semibold(t.font_start_title), t.form_ink);
+        let (rect, _) = ui.allocate_exact_size(galley.size(), Sense::hover());
+        ui.painter().with_clip_rect(ui.clip_rect().intersect(rect)).galley(rect.min, galley, t.form_ink);
+    }
+
     pub(crate) fn section_title(ui: &mut Ui, title: &str) {
         let t = Tokens::get();
         let galley = ui.painter().layout_no_wrap(title.to_owned(), crate::fonts::semibold(t.font_intro), t.form_ink);

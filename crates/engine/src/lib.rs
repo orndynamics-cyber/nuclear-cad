@@ -33,7 +33,9 @@ pub mod slicer_files;
 mod slicer_icon;
 pub mod slicers;
 pub mod snap;
+pub mod storage;
 pub mod timing;
+pub mod versions;
 pub mod view;
 
 use std::sync::Arc;
