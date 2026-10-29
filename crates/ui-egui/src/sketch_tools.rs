@@ -502,6 +502,16 @@ pub fn refine_snap(
     })
 }
 
+/// Forget the inference label (the reference snap draws a glyph instead).
+pub(crate) fn clear_snap_hint() {
+    SNAP.with(|s| *s.borrow_mut() = None);
+}
+
+/// Whether one of the extra sketch tools places points on the sketch plane.
+pub(crate) fn takes_points(id: &str) -> bool {
+    matches!(mode(id), Some(Mode::Points(_)))
+}
+
 /// The constraints one glyph stands for. A point that is the midpoint of several lines (their
 /// midpoints meet) shows a single MidPoint glyph, the first constraint's, for all of them;
 /// any other constraint stands for itself.

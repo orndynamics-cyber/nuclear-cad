@@ -288,6 +288,8 @@ fn centre_and_midpoint_tracking_is_visual_in_idle_and_drawing_modes() {
     let mut h = tracking_fixture();
     let before = h.app.session.doc.to_json();
     let undo = h.app.session.undo.len();
+    // Drawing tools keep these visual guides with the reference snap off (its guides place points).
+    h.call("ui.prefs", json!({"sketch_reference_snap":false}));
     for tool in [None, Some("sketch.line"), Some("sketch.circle.center")] {
         if let Some(tool) = tool {
             h.app.start(tool);

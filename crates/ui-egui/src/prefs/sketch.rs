@@ -7,6 +7,8 @@ pub(super) fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     ui_kit::settings_section(ui, "sketch", app.tr("prefs.sketching"), |ui| {
         ui_kit::checkbox(ui, app.tr("prefs.sketch_tracking_guides"), &mut app.preferences.sketch_tracking_guides)
             .on_hover_text(app.tr("prefs.sketch_tracking_guides_note"));
+        let snap = setting::sketch_reference_snap(app, ui).on_hover_text(app.tr("prefs.sketch_reference_snap_note"));
+        crate::scenario::publish_target("prefs:sketch_reference_snap", snap.rect);
         let mut auto = app.session.auto_project;
         if ui_kit::checkbox(ui, crate::i18n::tr_label("Project face edges into new sketches"), &mut auto).changed() {
             let _ = app.run("sketch.auto_project", json!({"value": auto}));

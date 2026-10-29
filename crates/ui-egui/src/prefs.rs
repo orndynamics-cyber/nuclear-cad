@@ -1167,6 +1167,10 @@ preference_settings! {
     suppress_sketch_snap: ModifierCombo = ModifierCombo::CTRL_ALT, PAGE_SKETCH;
     /// Temporary horizontal/vertical guides from hovered centres and edge midpoints.
     sketch_tracking_guides: bool = true, PAGE_SKETCH;
+    /// Drawing tools stick to points, midpoints, crossings, tangents, perpendiculars and curves
+    /// (the click keeps the relation) and follow guides from tracked points. Off: the classic
+    /// snap (nearest point, then the line inferences) and visual-only alignment guides.
+    sketch_reference_snap: bool = true, PAGE_SKETCH => check_id("prefs.sketch_reference_snap");
     /// Whether Alt/Option also frees gizmo / canvas manipulator arrows (Primary always does).
     manipulator_free_alt: bool = true, PAGE_SKETCH;
     /// A sketch's icon in History and the browser takes the colour of its solve state, and its
@@ -4644,6 +4648,7 @@ mod tests {
             ("suppress_sketch_snap", json!(ModifierCombo::NONE), PAGE_SKETCH),
             ("sketch_state_icons", json!(false), PAGE_SKETCH),
             ("sketch_tracking_guides", json!(false), PAGE_SKETCH),
+            ("sketch_reference_snap", json!(false), PAGE_SKETCH),
             ("msaa", json!(8), PAGE_GRAPHICS),
         ];
         let defaults = serde_json::to_value(Prefs::default()).unwrap();
