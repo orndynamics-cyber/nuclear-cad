@@ -1,6 +1,17 @@
 //! General preferences, composed from shared settings form blocks.
 use super::*;
 
+/// The language list, shared by Settings and the Start page: both set the one saved preference,
+/// which the next frame draws the whole interface in. Open designs and their edits are untouched.
+pub(crate) fn language_choices(app: &mut SolveApp, ui: &mut egui::Ui) {
+    for locale in crate::i18n::choices(&app.preferences.language) {
+        let id = locale.id();
+        if ui_kit::list_picker(ui, id, &locale.display_name(), app.preferences.language == id).clicked() {
+            app.preferences.language = id.into();
+        }
+    }
+}
+
 pub(super) fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     let labels = t.space_24 * 6.0 + t.space_6;
@@ -10,11 +21,7 @@ pub(super) fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
             ui_kit::row(ui, app.tr("prefs.interface_language"), |ui| {
                 ui_kit::settings_control_width(ui, t.form_card_width - t.space_4, |ui| {
                     ui_kit::dropdown_menu(ui, "pref_language", &crate::i18n::Locale::for_language(&app.preferences.language).display_name(), |ui| {
-                        for locale in crate::i18n::LOCALES {
-                            if ui_kit::list_picker(ui, locale.id, &locale.display_name(), app.preferences.language == locale.id).clicked() {
-                                app.preferences.language = locale.id.into();
-                            }
-                        }
+                        language_choices(app, ui);
                     });
                 });
             });

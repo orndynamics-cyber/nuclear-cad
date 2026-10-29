@@ -32,6 +32,7 @@ use crate::theme::Tokens;
 use crate::tool_modifiers::ModifierCombo;
 use crate::ui_kit;
 use crate::viewport::NavMode;
+pub(crate) use general::language_choices;
 
 pub const UNITS: &[&str] = &["mm", "cm", "m", "in", "ft"];
 pub const OPENSCAD_NAV: &str = "openscad";

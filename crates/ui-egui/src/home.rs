@@ -751,12 +751,14 @@ fn content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction
                 Section::Recovery => (app.tr_label("Recover"), app.tr("home.recovery_hint")),
                 Section::Export => (app.tr("home.export"), app.tr("home.export_hint")),
             };
-            if app.home.section == Section::Start && !cfg!(target_arch = "wasm32") {
-                // Where new designs are saved, right beside Start.
+            if app.home.section == Section::Start {
+                // Where new designs are saved, right beside Start (not in the browser build), and
+                // the interface language apart from it, at the far right.
                 ui.horizontal(|ui| {
                     FileView::title_fit(ui, title);
                     ui.add_space(t.space_12);
                     crate::storage_ui::button(app, ui);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| language(app, ui));
                 });
             } else {
                 FileView::title(ui, title);
@@ -774,6 +776,15 @@ fn content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction
             }
         });
     });
+}
+
+/// The Start page's language picker: the language's own name, never a flag, and the same
+/// preference as Settings → General → Language.
+fn language(app: &mut SolveApp, ui: &mut egui::Ui) {
+    let current = crate::i18n::Locale::for_language(&app.preferences.language).display_name();
+    let response = ui_kit::compact_dropdown_menu(ui, "home_language", &current, |ui| crate::prefs::language_choices(app, ui));
+    let response = response.on_hover_text(app.tr("prefs.interface_language"));
+    publish("home:language", &response);
 }
 
 fn start_content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction>) {
@@ -1405,6 +1416,52 @@ mod tests {
         h.app.keymap.open = true;
         h.frames(2);
         assert!(shown(&h) && h.app.prefs_window.section == crate::prefs::PAGE_SHORTCUTS && h.app.home.open);
+    }
+
+    /// The Start page's language picker and Settings › General › Language set the one saved
+    /// preference. A fresh install starts in English; switching keeps the open design and its
+    /// unsaved edit, Home and the samples; the choice survives a restart.
+    #[test]
+    fn the_start_and_settings_language_pickers_share_one_preference() {
+        let mut h = crate::scenario::Harness::new();
+        assert_eq!(h.app.preferences.language, "en", "a fresh install starts in English");
+        h.app.run("solid.box", serde_json::json!({"length":10,"width":12,"height":14})).unwrap();
+        let design = h.app.session.doc.to_json();
+        assert!(h.app.session.is_dirty());
+        h.app.home.show(h.app.session.revision);
+
+        click_file(&mut h, "home:language");
+        for id in crate::i18n::OFFERED {
+            assert!(crate::scenario::handle_at(&format!("dialog:list:{id}")).is_some(), "Start offers {id}");
+        }
+        click_file(&mut h, "dialog:list:ru");
+        assert_eq!(h.app.preferences.language, "ru");
+        assert!(h.app.home.open, "Home stays open");
+        assert_eq!(h.app.session.doc.to_json(), design, "the open design is untouched");
+        assert!(h.app.session.is_dirty(), "its unsaved edit is still unsaved");
+        assert_eq!(h.app.docs.count(), 1);
+        let samples = solidcraft_engine::sample::samples().len();
+        assert!(samples > 0);
+        for index in 0..samples {
+            assert!(crate::scenario::rect_of(&format!("home:sample:{index}")).is_some(), "sample {index} is still on Start");
+        }
+
+        // Settings shows the same language and changes the same preference.
+        crate::prefs::open_at(&mut h.app, crate::prefs::PAGE_GENERAL);
+        h.frames(3);
+        let row = crate::i18n::Locale::for_language("ru").text("prefs.interface_language");
+        click_file(&mut h, &format!("dialog:{row}"));
+        for id in crate::i18n::OFFERED {
+            assert!(crate::scenario::handle_at(&format!("dialog:list:{id}")).is_some(), "Settings offers {id}");
+        }
+        click_file(&mut h, "dialog:list:pt-BR");
+        h.call("ui.prefs", serde_json::json!({"button": "ok"}));
+        assert_eq!(h.app.preferences.language, "pt-BR");
+        assert_eq!(h.app.session.doc.to_json(), design);
+
+        let mut restarted = SolveApp::new(Session::default(), Default::default());
+        restarted.load_prefs(&h.app.prefs());
+        assert_eq!(restarted.preferences.language, "pt-BR", "the choice survives a restart");
     }
 
     fn click_file(h: &mut crate::scenario::Harness, id: &str) {
