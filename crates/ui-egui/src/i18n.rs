@@ -128,6 +128,20 @@ pub fn is_supported(id: &str) -> bool {
     LOCALES.iter().any(|catalog| catalog.id == id)
 }
 
+/// The interface languages the language pickers offer, in their order. The other catalogs stay
+/// registered, so a language chosen before keeps working.
+pub const OFFERED: &[&str] = &["en", "pt-BR", "ru"];
+
+/// What a language picker lists: the offered languages, and the saved language when it is not
+/// one of them, so a choice made before is shown and kept rather than replaced.
+pub fn choices(current: &str) -> Vec<Locale> {
+    let mut ids: Vec<&str> = OFFERED.to_vec();
+    if is_supported(current) && !OFFERED.contains(&current) {
+        ids.push(current);
+    }
+    ids.into_iter().map(Locale::for_language).collect()
+}
+
 /// Immutable locale reference. Catalogs parse once; lookups are logarithmic.
 #[derive(Clone, Copy)]
 pub struct Locale(&'static Catalog);
@@ -139,6 +153,11 @@ impl Locale {
 
     pub fn name(self) -> &'static str {
         self.0.name
+    }
+
+    /// The registered locale ID, as the language preference saves it.
+    pub fn id(self) -> &'static str {
+        self.0.id
     }
 
     /// The language's own name as the language list draws it.
@@ -446,13 +465,14 @@ mod tests {
         ENGLISH.messages().values().map(String::as_str).collect()
     }
 
-    /// Catalogs delivered complete. English is the source catalog; Arabic, Czech, Italian, Japanese and Chinese
-    /// are complete. German, Korean, Malay, Russian, French and Ukrainian
-    /// are partial (German and Korean predate the coverage guards; Russian, French and Ukrainian
-    /// are kept partial so a new label doesn't need more translations), so their gaps fall back
+    /// Catalogs delivered complete. English is the source catalog; Arabic, Hebrew, Japanese,
+    /// Portuguese (Brazil), Russian, Vietnamese and Chinese are complete (Portuguese and Russian are
+    /// offered by the language pickers, so a new message must reach them too). German, Korean,
+    /// Malay, French and Ukrainian are partial (German and Korean predate the coverage guards;
+    /// French and Ukrainian are kept partial so a new label doesn't need more translations), so their gaps fall back
     /// to English and are reported by `cargo xtask i18n` without failing the build, while
     /// nothing in the complete catalogs may regress.
-    const COMPLETE: &[&str] = &["ar", "he", "ja", "vi", "zh"];
+    const COMPLETE: &[&str] = &["ar", "he", "ja", "pt-BR", "ru", "vi", "zh"];
 
     /// `text()` falls back to English silently, so a message a complete locale never received is
     /// shown in English inside an otherwise translated UI, with nothing in the build to say so.
@@ -1007,6 +1027,33 @@ mod tests {
         assert_eq!(ms.dynamic("4 degrees of freedom"), "4 darjah kebebasan");
         assert_eq!(ms.given_name("Sketch of bracket"), "Sketch of bracket");
         assert_eq!(ms.label("NonExistentKey"), "NonExistentKey");
+    }
+
+    /// The pickers offer English, Portuguese (Brazil) and Russian by their own names; a language
+    /// saved before from the longer list stays listed (last) so it is kept, not replaced.
+    #[test]
+    fn the_language_pickers_offer_three_languages_and_keep_an_earlier_choice() {
+        let names = |current: &str| choices(current).into_iter().map(|l| (l.id(), l.name())).collect::<Vec<_>>();
+        let offered = vec![("en", "English"), ("pt-BR", "Português (Brasil)"), ("ru", "Русский")];
+        assert_eq!(names("en"), offered);
+        assert_eq!(names("ru"), offered);
+        let mut kept = offered.clone();
+        kept.push(("de", "Deutsch"));
+        assert_eq!(names("de"), kept, "an earlier German choice stays");
+        assert_eq!(names("xx"), offered, "an unknown saved id adds nothing");
+        assert!(OFFERED.iter().all(|id| is_supported(id)));
+    }
+
+    /// A message a catalog lacks reads in English, never as its id, in every offered language.
+    #[test]
+    fn a_missing_translation_falls_back_to_english() {
+        static PARTIAL: Catalog = Catalog::new("xx", "Test", r#"{"ui.save": "Guardar"}"#);
+        let partial = Locale(&PARTIAL);
+        assert_eq!(partial.text("ui.save"), "Guardar");
+        assert_eq!(partial.text("ui.preferences"), "Preferences");
+        for id in OFFERED {
+            assert_ne!(Locale::for_language(id).text("prefs.interface_language"), "prefs.interface_language");
+        }
     }
 
     #[test]
