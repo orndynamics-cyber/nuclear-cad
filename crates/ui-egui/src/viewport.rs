@@ -4056,6 +4056,14 @@ pub fn sketch_point_at(app: &SolveApp, proj: &Proj, pos: Pos2) -> Option<(Vec2, 
     let sid = app.session.active_sketch?;
     let st = crate::open_meshing::shown_world(app);
     let ss = st.sketch(sid)?;
+    // Drawing tools: reference snaps and inference guides (Preferences › Sketch).
+    let (o, d) = proj.ray(pos);
+    let lp = ss.plane.intersect_ray(o, d).map(|w| ss.plane.to_local(w));
+    if let Some(lp) = lp
+        && let Some(p) = crate::sketch_snap::snap_at(app, proj, &ss.sketch, &ss.plane, pos, lp)
+    {
+        return Some(p);
+    }
     for h in pick_for_tool(app, proj, pos) {
         if let Hit::SketchPoint { sketch, id, at } = h
             && sketch == sid
@@ -4063,9 +4071,7 @@ pub fn sketch_point_at(app: &SolveApp, proj: &Proj, pos: Pos2) -> Option<(Vec2, 
             return Some((at, Some(id)));
         }
     }
-    let (o, d) = proj.ray(pos);
-    let w = ss.plane.intersect_ray(o, d)?;
-    let lp = ss.plane.to_local(w);
+    let lp = lp?;
     if crate::drag_snap::suppressed() {
         return Some((lp, None));
     }
@@ -4769,6 +4775,7 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     crate::sketch3d::show(app, &painter, &proj);
     let tracking_cursor = hover.filter(|_| inside && !navigating && !app.esc_handled && !ui.input(|i| i.key_pressed(egui::Key::Escape)));
     crate::inference::track_and_show(app, &painter, &proj, tracking_cursor);
+    crate::sketch_snap::show(app, &painter, &proj);
     crate::inference::show(app, &painter, &proj);
     crate::drag_snap::show(app, &painter, &proj);
     crate::insert_handles::show(app, ui, &proj);
@@ -5649,7 +5656,7 @@ fn hover_highlight(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
 
 /// How near the pointer must come to the woken centre of a circle or arc (screen points),
 /// against 8 for other sketch points.
-const WOKEN_CENTRE_PX: f32 = 16.0;
+pub(crate) const WOKEN_CENTRE_PX: f32 = 16.0;
 
 /// Hovering a circle's or an arc's edge in the sketch being edited wakes its centre: drawn, and
 /// picked from further away, so a line or a dimension is easily taken to it, and it stays awake
