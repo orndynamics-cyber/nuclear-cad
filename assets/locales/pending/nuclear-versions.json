@@ -1,0 +1,56 @@
+{
+  "en": {
+    "cmd.file_versions": "Version History",
+    "cmd.file_version_protect": "Protect Version",
+    "cmd.file_version_open": "Open Version",
+    "cmd.file_version_restore": "Restore Version"
+  },
+  "pt-BR": {
+    "cmd.file_versions": "Histórico de versões",
+    "cmd.file_version_protect": "Proteger versão",
+    "cmd.file_version_open": "Abrir versão",
+    "cmd.file_version_restore": "Restaurar versão"
+  },
+  "de": {
+    "cmd.file_versions": "Versionsverlauf",
+    "cmd.file_version_protect": "Version schützen",
+    "cmd.file_version_open": "Version öffnen",
+    "cmd.file_version_restore": "Version wiederherstellen"
+  },
+  "ja": {
+    "cmd.file_versions": "バージョン履歴",
+    "cmd.file_version_protect": "バージョンを保護",
+    "cmd.file_version_open": "バージョンを開く",
+    "cmd.file_version_restore": "バージョンを復元"
+  },
+  "ko": {
+    "cmd.file_versions": "버전 기록",
+    "cmd.file_version_protect": "버전 보호",
+    "cmd.file_version_open": "버전 열기",
+    "cmd.file_version_restore": "버전 복원"
+  },
+  "zh": {
+    "cmd.file_versions": "版本历史",
+    "cmd.file_version_protect": "保护版本",
+    "cmd.file_version_open": "打开版本",
+    "cmd.file_version_restore": "还原版本"
+  },
+  "ar": {
+    "cmd.file_versions": "سجل الإصدارات",
+    "cmd.file_version_protect": "حماية الإصدار",
+    "cmd.file_version_open": "فتح الإصدار",
+    "cmd.file_version_restore": "استعادة الإصدار"
+  },
+  "he": {
+    "cmd.file_versions": "היסטוריית גרסאות",
+    "cmd.file_version_protect": "הגן על גרסה",
+    "cmd.file_version_open": "פתח גרסה",
+    "cmd.file_version_restore": "שחזר גרסה"
+  },
+  "vi": {
+    "cmd.file_versions": "Lịch sử phiên bản",
+    "cmd.file_version_protect": "Bảo vệ phiên bản",
+    "cmd.file_version_open": "Mở phiên bản",
+    "cmd.file_version_restore": "Khôi phục phiên bản"
+  }
+}

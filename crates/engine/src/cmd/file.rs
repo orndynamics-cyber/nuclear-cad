@@ -40,12 +40,28 @@ pub static COMMANDS: &[CommandSpec] = &[
         .icon("save")
         .key("Ctrl+S")
         .noundo()
-        .params("path? (default: current file); format?: container|json (default: json for .json, otherwise container); compression?: fast|compact (default: fast); cache?: bool (the evaluated model, so the design opens without rebuilding; default: true); preview?: bool (saved display meshes, default: false); overwrite?: bool (replace the design's file even though another program or computer changed it since it was opened or saved; without it that save is refused)"),
+        .params("path? (default: current file); format?: container|json (default: json for .json, otherwise container); compression?: fast|compact (default: fast); cache?: bool (the evaluated model, so the design opens without rebuilding; default: true); preview?: bool (saved display meshes, default: false); overwrite?: bool (replace the design's file even though another program or computer changed it since it was opened or saved; without it that save is refused); version?: manual|none (record the saved file as a permanent version in its history, `Nuclear Versions/<file name>` beside it; default none); keep?: number (ordinary versions kept, 0: all; default 20)"),
     CommandSpec::new("file.save_as", "Save As", save_as)
         .icon("save")
         .key("Ctrl+Shift+S")
         .noundo()
-        .params("path; format?: container|json (default: json for .json, otherwise container); compression?: fast|compact (default: fast); cache?: bool (the evaluated model, so the design opens without rebuilding; default: true); preview?: bool (saved display meshes, default: false); overwrite?: bool (as file.save, when `path` is the design's own file)"),
+        .params("path; format?: container|json (default: json for .json, otherwise container); compression?: fast|compact (default: fast); cache?: bool (the evaluated model, so the design opens without rebuilding; default: true); preview?: bool (saved display meshes, default: false); overwrite?: bool (as file.save, when `path` is the design's own file); version?: manual|none (record the saved file as a permanent version in its history, `Nuclear Versions/<file name>` beside it; default none); keep?: number (ordinary versions kept, 0: all; default 20)"),
+    CommandSpec::new("file.versions", "Version History", versions_list)
+        .icon("restore")
+        .noundo()
+        .params("path? (default: the design's file) → versions [{number, saved_at, kind: manual|restore, protected, restored_from?, bytes}], oldest first; dir (where they are kept, `Nuclear Versions/<file name>` beside the file); keep?: number (0: all): also `would_remove`, the versions that setting would prune"),
+    CommandSpec::new("file.version_protect", "Protect Version", version_protect)
+        .icon("restore")
+        .noundo()
+        .params("number; protected?: bool (default true; false releases it); path? — a protected version is never pruned and does not count toward the versions kept"),
+    CommandSpec::new("file.version_open", "Open Version", version_open)
+        .icon("open")
+        .noundo()
+        .params("number; path? — opens that version read-only, for reference: it cannot be saved over (Save As makes a copy), and autosave never writes it"),
+    CommandSpec::new("file.version_restore", "Restore Version", version_restore)
+        .icon("restore")
+        .noundo()
+        .params("number; discard_changes?: bool (required true when the design has unsaved changes); keep?: number (0: all; default 20) — the design's file takes that version's content and a new version records it (restoring V3 when V8 is newest makes V9); no older version changes"),
     CommandSpec::new("doc.recovery_list", "Recoverable Designs", recovery_list).icon("restore")
         .noundo()
         .params("dir? (default: the recovery folder) → designs autosaved by apps that crashed or closed with unsaved changes"),
@@ -579,7 +595,9 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         Some(x) if !x.trim().is_empty() => x.to_string(),
         _ => s.path.clone().ok_or_else(|| bad("file.save", "the design has no file yet: give a `path`"))?,
     };
-    write(
+    let kind = version_kind(p, "file.save")?;
+    let retention = retention(p, "file.save")?;
+    let out = write(
         s,
         &path,
         str_(p, "format").unwrap_or(default_design_format(&path)),
@@ -587,7 +605,125 @@ fn save(s: &mut Session, p: &Value) -> Result<Value> {
         bool_(p, "preview").unwrap_or(false),
         bool_(p, "cache").unwrap_or(true),
         bool_(p, "overwrite").unwrap_or(false),
-    )
+    )?;
+    Ok(with_version(out, &path, kind, retention))
+}
+
+/// `version`: whether a save records a permanent version (`manual`: the app's Save and Ctrl+S)
+/// or not (`none`, the default for scripts and agents). Autosave never saves the file at all: it
+/// keeps a local recovery checkpoint (`recovery`).
+fn version_kind(p: &Value, cmd: &str) -> Result<Option<crate::versions::Kind>> {
+    match str_(p, "version") {
+        None | Some("none") => Ok(None),
+        Some("manual") => Ok(Some(crate::versions::Kind::Manual)),
+        Some(other) => Err(bad(cmd, format!("`version` must be manual or none, not {other}"))),
+    }
+}
+
+/// `keep`: how many ordinary versions to keep (0: all; default 20).
+fn retention(p: &Value, cmd: &str) -> Result<crate::versions::Retention> {
+    match p.get("keep") {
+        None | Some(Value::Null) => Ok(crate::versions::Retention::default()),
+        Some(v) => match v.as_u64() {
+            Some(0) => Ok(crate::versions::Retention::All),
+            Some(n) if n <= 100_000 => Ok(crate::versions::Retention::Last(n as u32)),
+            _ => Err(bad(cmd, "`keep` must be a whole number from 0 (keep all) to 100000")),
+        },
+    }
+}
+
+/// Record the file just saved at `path` as a version. The save itself has succeeded: a version
+/// that cannot be made is reported in the reply (`version_error`), never undoes the save.
+fn with_version(mut out: Value, path: &str, kind: Option<crate::versions::Kind>, retention: crate::versions::Retention) -> Value {
+    let Some(kind) = kind else { return out };
+    // Plain JSON designs are written for other tools to read; versions are of containers.
+    if default_design_format(path) == "json" {
+        return out;
+    }
+    let made = crate::versions::History::of(std::path::Path::new(path)).and_then(|h| {
+        let bytes = std::fs::read(path).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+        h.publish(&bytes, kind, None, retention)
+    });
+    match made {
+        Ok(Some(v)) => out["version"] = json!(v.number),
+        Ok(None) => out["version"] = Value::Null,
+        Err(e) => out["version_error"] = json!(e.to_string()),
+    }
+    out
+}
+
+/// The design file a version command is about: `path`, else the design's own file.
+fn versioned_path(s: &Session, p: &Value, cmd: &str) -> Result<String> {
+    match str_(p, "path") {
+        Some(x) if !x.trim().is_empty() => Ok(x.to_string()),
+        _ => s.path.clone().ok_or_else(|| bad(cmd, "the design has no file yet, so it has no versions: save it first")),
+    }
+}
+
+fn version_number(p: &Value, cmd: &str) -> Result<u32> {
+    p.get("number").and_then(Value::as_u64).and_then(|n| u32::try_from(n).ok()).ok_or_else(|| bad(cmd, "`number` (a version number) is required"))
+}
+
+fn versions_list(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "file.versions";
+    let path = versioned_path(s, p, cmd)?;
+    solidcraft_io::vfs::check(&path).map_err(|e| EngineError::Other(e.to_string()))?;
+    let h = crate::versions::History::of(std::path::Path::new(&path))?;
+    let mut out = json!({"path": path, "dir": h.dir(), "versions": h.list()?});
+    if p.get("keep").is_some() {
+        out["would_remove"] = json!(h.plan_prune(retention(p, cmd)?)?);
+    }
+    Ok(out)
+}
+
+fn version_protect(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "file.version_protect";
+    let path = versioned_path(s, p, cmd)?;
+    solidcraft_io::vfs::check(&path).map_err(|e| EngineError::Other(e.to_string()))?;
+    let number = version_number(p, cmd)?;
+    let protected = bool_(p, "protected").unwrap_or(true);
+    crate::versions::History::of(std::path::Path::new(&path))?.set_protected(number, protected)?;
+    Ok(json!({"number": number, "protected": protected}))
+}
+
+fn version_open(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "file.version_open";
+    let path = versioned_path(s, p, cmd)?;
+    solidcraft_io::vfs::check(&path).map_err(|e| EngineError::Other(e.to_string()))?;
+    let number = version_number(p, cmd)?;
+    let h = crate::versions::History::of(std::path::Path::new(&path))?;
+    let mut doc = solidcraft_io::read_design(&h.read(number)?)?;
+    let stem = std::path::Path::new(&path).file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
+    doc.name = format!("{stem} (V{number})");
+    let file = h.dir().join(format!("v{number:04}.{}", solidcraft_io::DESIGN_EXT)).to_string_lossy().into_owned();
+    s.replace_design(Session::opened_at(doc, None, Some(&file)));
+    // For reference only: Save refuses, Save As makes a copy, autosave leaves it alone.
+    s.read_only = true;
+    Ok(json!({"number": number, "path": file, "name": s.doc.name, "read_only": true}))
+}
+
+fn version_restore(s: &mut Session, p: &Value) -> Result<Value> {
+    let cmd = "file.version_restore";
+    let path = s.path.clone().ok_or_else(|| bad(cmd, "the design has no file yet, so it has no versions"))?;
+    if s.read_only {
+        return Err(bad(cmd, "this design is open read-only; open its own file to restore a version"));
+    }
+    if s.is_dirty() && !bool_(p, "discard_changes").unwrap_or(false) {
+        return Err(bad(cmd, "the design has unsaved changes: save them first, or pass `discard_changes: true`"));
+    }
+    let number = version_number(p, cmd)?;
+    let retention = retention(p, cmd)?;
+    let h = crate::versions::History::of(std::path::Path::new(&path))?;
+    let bytes = h.read(number)?;
+    let doc = solidcraft_io::read_design(&bytes)?;
+    // The file takes the version's bytes as they are (atomic, the replaced file kept as `.bak`),
+    // and a new version records them: no version is rewritten.
+    solidcraft_io::write_atomic(std::path::Path::new(&path), &bytes, true).map_err(|e| EngineError::Other(format!("{path}: {e}")))?;
+    let made = h.publish(&bytes, crate::versions::Kind::Restore, Some(number), retention)?;
+    s.replace_design(Session::opened_at(doc, None, Some(&path)));
+    s.disk = solidcraft_io::design_lock::stamp(&path);
+    s.mark_saved();
+    Ok(json!({"path": path, "restored": number, "version": made.map(|v| v.number)}))
 }
 
 fn default_design_format(path: &str) -> &'static str {
@@ -596,7 +732,9 @@ fn default_design_format(path: &str) -> &'static str {
 
 fn save_as(s: &mut Session, p: &Value) -> Result<Value> {
     let path = path_arg(p, "file.save_as")?.to_string();
-    write(
+    let kind = version_kind(p, "file.save_as")?;
+    let retention = retention(p, "file.save_as")?;
+    let out = write(
         s,
         &path,
         str_(p, "format").unwrap_or(default_design_format(&path)),
@@ -604,7 +742,8 @@ fn save_as(s: &mut Session, p: &Value) -> Result<Value> {
         bool_(p, "preview").unwrap_or(false),
         bool_(p, "cache").unwrap_or(true),
         bool_(p, "overwrite").unwrap_or(false),
-    )
+    )?;
+    Ok(with_version(out, &path, kind, retention))
 }
 
 /// A mesh export's `quality`: standard (as every export was) unless asked for (#4747).
@@ -1620,6 +1759,48 @@ mod tests {
             assert_eq!(r["name"], stem);
             assert!(!s.is_dirty(), "showing the file's name is not a change to save");
         }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn saves_record_versions_and_restoring_makes_a_new_one() {
+        let dir = solidcraft_io::vfs::temp_dir().join(format!("nuclear-save-versions-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("Bracket.sc");
+        let mut s = Session::default();
+        s.execute("solid.box", &json!({"length":10,"width":20,"height":30})).unwrap();
+        let first = s.execute("file.save_as", &json!({"path":file, "version":"manual"})).unwrap();
+        assert_eq!(first["version"], 1);
+        let v1 = std::fs::read(&file).unwrap();
+        // Saving again with nothing changed makes no new version.
+        assert_eq!(s.execute("file.save", &json!({"version":"manual"})).unwrap()["version"], Value::Null);
+        // A script's save records nothing unless asked.
+        assert!(s.execute("file.save", &json!({})).unwrap().get("version").is_none());
+        s.execute("solid.box", &json!({"length":5,"width":5,"height":5})).unwrap();
+        assert_eq!(s.execute("file.save", &json!({"version":"manual"})).unwrap()["version"], 2);
+        let versions = s.execute("file.versions", &json!({"keep": 1})).unwrap();
+        assert_eq!(versions["versions"].as_array().unwrap().len(), 2);
+        assert_eq!(versions["would_remove"], json!([1]));
+
+        // Restore V1: the file takes V1's bytes, V3 records them, V1 and V2 stay as they were.
+        s.execute("solid.box", &json!({"length":1,"width":1,"height":1})).unwrap();
+        assert!(s.execute("file.version_restore", &json!({"number":1})).is_err(), "unsaved changes are not dropped silently");
+        let restored = s.execute("file.version_restore", &json!({"number":1, "discard_changes":true})).unwrap();
+        assert_eq!((restored["restored"].as_u64(), restored["version"].as_u64()), (Some(1), Some(3)));
+        assert_eq!(std::fs::read(&file).unwrap(), v1);
+        assert!(!s.is_dirty());
+        assert_eq!(s.execute("inspect.measure", &json!({})).unwrap()["body_count"], 1);
+        let h = crate::versions::History::of(&file).unwrap();
+        assert_eq!(h.read(1).unwrap(), v1);
+        assert_eq!(h.list().unwrap().iter().map(|v| v.number).collect::<Vec<_>>(), [1, 2, 3]);
+
+        // A version opened for reference cannot be saved over.
+        s.execute("file.version_open", &json!({"number":2})).unwrap();
+        assert!(s.read_only);
+        assert_eq!(s.execute("inspect.measure", &json!({})).unwrap()["body_count"], 2);
+        assert!(s.execute("file.save", &json!({})).is_err());
+        assert_eq!(h.list().unwrap().len(), 3);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

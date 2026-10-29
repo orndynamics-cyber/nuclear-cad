@@ -10,6 +10,7 @@
 use std::path::PathBuf;
 
 use solidcraft_engine::storage::{self, Kind, Status};
+use solidcraft_engine::versions;
 
 use crate::SolveApp;
 use crate::ui_kit;
@@ -28,8 +29,20 @@ pub struct Storage {
     pub error: Option<String>,
     /// The Advanced details are shown.
     advanced: bool,
+    /// What the retention setting would remove from the open design's versions: for which
+    /// design and setting, and the version numbers. Read only when one of them changes.
+    impact: Option<(String, u32, Vec<u32>)>,
+    /// The Version History window, when open.
+    pub versions: Option<VersionsView>,
     #[cfg(not(target_arch = "wasm32"))]
     checking: Option<std::sync::mpsc::Receiver<(PathBuf, Status, Option<String>)>>,
+}
+
+/// The Version History window: the open design's versions, as last read.
+pub struct VersionsView {
+    path: String,
+    list: Vec<solidcraft_engine::versions::Version>,
+    error: Option<String>,
 }
 
 /// The Documents folder: the host's answer, else the engine's.
@@ -186,9 +199,122 @@ pub(crate) fn button(app: &mut SolveApp, ui: &mut egui::Ui) {
     }
 }
 
+/// What lowering the retention would remove from the open design's history at its next save,
+/// shown before it happens. Read from disk only when the design or the setting changes.
+fn retention_impact(app: &mut SolveApp) -> Option<String> {
+    let path = app.session.path.clone()?;
+    let keep = app.preferences.versions_keep;
+    let fresh = app.storage.impact.as_ref().is_some_and(|(p, k, _)| *p == path && *k == keep);
+    if !fresh {
+        let retention = if keep == 0 { versions::Retention::All } else { versions::Retention::Last(keep) };
+        let gone = versions::History::of(std::path::Path::new(&path)).and_then(|h| h.plan_prune(retention)).unwrap_or_default();
+        app.storage.impact = Some((path, keep, gone));
+    }
+    let (_, _, gone) = app.storage.impact.as_ref()?;
+    if gone.is_empty() {
+        return None;
+    }
+    let list = gone.iter().map(|n| format!("V{n}")).collect::<Vec<_>>().join(", ");
+    Some(crate::i18n::format("storage.versions_impact", &[("count", &gone.len().to_string()), ("versions", &list)]))
+}
+
+/// Open the Version History window on the open design's file.
+pub(crate) fn open_versions(app: &mut SolveApp) {
+    let Some(path) = app.session.path.clone() else { return };
+    let mut view = VersionsView { path, list: Vec::new(), error: None };
+    reload(&mut view);
+    app.storage.versions = Some(view);
+}
+
+fn reload(view: &mut VersionsView) {
+    match versions::History::of(std::path::Path::new(&view.path)).and_then(|h| h.list()) {
+        Ok(list) => (view.list, view.error) = (list, None),
+        Err(e) => (view.list, view.error) = (Vec::new(), Some(e.to_string())),
+    }
+}
+
+/// The Version History window: each version, newest first, with Protect, Open and Restore.
+fn show_versions(app: &mut SolveApp, ctx: &egui::Context) {
+    let Some(view) = app.storage.versions.as_ref() else { return };
+    // Another design opened since: the window was about that one.
+    let current = app.session.path.clone();
+    let reading = current.as_deref() == Some(view.path.as_str());
+    let list = view.list.clone();
+    let error = view.error.clone();
+    let name = std::path::Path::new(&view.path).file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let dirty = app.session.is_dirty();
+    let mut act: Option<(&'static str, serde_json::Value)> = None;
+    let title = format!("{} · {name}", crate::i18n::tr("cmd.file_versions"));
+    let (closed, action) = ui_kit::Window::new(egui::Id::new("sc_versions"), "restore", &title)
+        .cards(2.0)
+        .actions("", crate::i18n::tr("ui.close"), None)
+        .show(ctx, true, |ui| {
+            ui.spacing_mut().item_spacing.y = crate::theme::Tokens::get().space_6;
+            if let Some(e) = &error {
+                ui_kit::text(ui, e, ui_kit::Text::Error("versions:error"));
+            }
+            if list.is_empty() && error.is_none() {
+                ui_kit::empty_box(ui, "versions:none", crate::i18n::tr("versions.none"));
+            }
+            for v in list.iter().rev() {
+                ui.push_id(v.number, |ui| {
+                    ui.horizontal(|ui| {
+                        let mut line = format!("V{} · {}", v.number, crate::recovery_ui::ago(v.saved_at));
+                        if let Some(from) = v.restored_from {
+                            line.push_str(" · ");
+                            line.push_str(&crate::i18n::format("versions.restored_from", &[("version", &format!("V{from}"))]));
+                        }
+                        if v.protected {
+                            line.push_str(" · ");
+                            line.push_str(crate::i18n::tr("versions.protected"));
+                        }
+                        ui_kit::text(ui, &line, ui_kit::Text::Inline);
+                        let protect = if v.protected { "versions.unprotect" } else { "versions.protect" };
+                        if ui_kit::button(ui, crate::i18n::tr(protect), ui_kit::Button::Small).clicked() {
+                            act = Some(("file.version_protect", serde_json::json!({"number": v.number, "protected": !v.protected})));
+                        }
+                        if ui_kit::button(ui, crate::i18n::tr("versions.open"), ui_kit::Button::Small).clicked() {
+                            act = Some(("file.version_open", serde_json::json!({"number": v.number})));
+                        }
+                        let restore = ui_kit::button(ui, crate::i18n::tr("versions.restore"), ui_kit::Button::Enabled(reading && !dirty));
+                        let restore = if dirty { restore.on_disabled_hover_text(crate::i18n::tr("versions.restore_needs_save")) } else { restore };
+                        if restore.clicked() {
+                            act = Some(("file.version_restore", serde_json::json!({"number": v.number, "keep": app.preferences.versions_keep})));
+                        }
+                    });
+                });
+            }
+        });
+    if let Some((command, mut params)) = act {
+        let path = app.storage.versions.as_ref().map(|v| v.path.clone()).unwrap_or_default();
+        if command != "file.version_restore" {
+            params["path"] = path.into();
+        }
+        if let Err(e) = app.run(command, params)
+            && let Some(view) = app.storage.versions.as_mut()
+        {
+            view.error = Some(e);
+        }
+        if command == "file.version_open" {
+            app.storage.versions = None;
+            app.storage.open = false;
+            app.home.open = false;
+            return;
+        }
+        if let Some(view) = app.storage.versions.as_mut() {
+            reload(view);
+        }
+        app.storage.impact = None;
+    }
+    if closed || matches!(action, ui_kit::Action::Cancel) || !reading {
+        app.storage.versions = None;
+    }
+}
+
 /// The Storage window.
 pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     poll(app);
+    show_versions(app, ctx);
     if !app.storage.open {
         return;
     }
@@ -295,6 +421,23 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                 recover = true;
             }
 
+            // Permanent versions: made by Save, kept by this setting; autosave never makes one.
+            ui_kit::text(ui, crate::i18n::tr("storage.versions"), ui_kit::Text::Heading("storage:versions"));
+            ui.horizontal(|ui| {
+                ui_kit::text(ui, crate::i18n::tr("storage.keep_versions"), ui_kit::Text::Inline);
+                ui_kit::settings_number(ui, &mut app.preferences.versions_keep, 0..=1000, 1.0);
+            });
+            ui_kit::text(ui, crate::i18n::tr("storage.versions_note"), ui_kit::Text::Note("storage:versions_note"));
+            if let Some(text) = retention_impact(app) {
+                ui_kit::text(ui, &text, ui_kit::Text::Error("storage:versions_impact"));
+            }
+            let has_file = app.session.path.is_some();
+            let history = ui_kit::button(ui, crate::i18n::tr("storage.version_history"), ui_kit::Button::Enabled(has_file));
+            crate::scenario::publish_handle("storage:version_history", history.rect.center());
+            if history.clicked() {
+                open_versions(app);
+            }
+
             ui_kit::checkbox(ui, crate::i18n::tr("storage.advanced"), &mut app.storage.advanced);
             if app.storage.advanced {
                 let recovery = app.autosave.as_ref().map(|a| a.dir.clone()).or_else(solidcraft_engine::recovery::default_dir);
@@ -385,6 +528,38 @@ mod tests {
         wait(&mut app);
         assert_eq!(folder(&app), Some(lib));
         assert_eq!(kind(&app), Kind::Local);
+        std::fs::remove_dir_all(&docs).unwrap();
+    }
+
+    #[test]
+    fn save_makes_a_version_autosave_does_not_and_lowering_retention_shows_its_cost() {
+        let (mut app, docs) = app_with_documents("versions");
+        let file = docs.join("Bracket.sc");
+        app.run("solid.box", serde_json::json!({"length":10,"width":10,"height":10})).unwrap();
+        crate::save_job::start(&mut app, "file.save_as", serde_json::json!({"path": file}));
+        crate::save_job::tick(&mut app, true);
+        app.run("solid.box", serde_json::json!({"length":5,"width":5,"height":5})).unwrap();
+        // An autosave of the change: a recovery checkpoint only.
+        let recovery = docs.join("recovery");
+        let mut saver = solidcraft_engine::recovery::Autosaver::new(&recovery, std::time::Duration::ZERO).unwrap();
+        assert!(saver.save(&app.session).unwrap());
+        let history = versions::History::of(&file).unwrap();
+        assert_eq!(history.list().unwrap().len(), 1, "autosave made no version");
+        crate::save_job::start(&mut app, "file.save", serde_json::json!({}));
+        crate::save_job::tick(&mut app, true);
+        assert_eq!(history.list().unwrap().iter().map(|v| v.number).collect::<Vec<_>>(), [1, 2]);
+        assert!(!app.session.is_dirty());
+
+        app.preferences.versions_keep = 1;
+        let impact = retention_impact(&mut app).unwrap();
+        assert!(impact.contains("V1"), "{impact}");
+        assert_eq!(history.list().unwrap().len(), 2, "showing the cost removes nothing");
+        app.preferences.versions_keep = 0;
+        assert_eq!(retention_impact(&mut app), None);
+
+        open_versions(&mut app);
+        assert_eq!(app.storage.versions.as_ref().unwrap().list.len(), 2);
+        saver.discard();
         std::fs::remove_dir_all(&docs).unwrap();
     }
 

@@ -17,7 +17,12 @@ pub struct Saving {
 /// Run `file.save` or `file.save_as` with `params`. On the desktop it runs on a worker and is
 /// taken up by [`tick`] (true: it is under way); in the browser, or when no thread can start, it
 /// runs here and is finished on return (false).
-pub fn start(app: &mut SolveApp, command: &'static str, params: Value) -> bool {
+pub fn start(app: &mut SolveApp, command: &'static str, mut params: Value) -> bool {
+    // The user's Save records a permanent version under the retention set in Storage.
+    if let Some(p) = params.as_object_mut() {
+        p.entry("version").or_insert_with(|| "manual".into());
+        p.entry("keep").or_insert_with(|| app.preferences.versions_keep.into());
+    }
     // An assembly reading its links for a part edited in place takes them up when the read is
     // done: a save before then would record a design that is about to change as saved.
     if let Some(name) = crate::edit_in_place::refreshing_assembly(app) {
@@ -67,6 +72,12 @@ pub fn tick(app: &mut SolveApp, wait: bool) {
         None => Err(format!("{command}: the save stopped")),
     };
     app.finish_command(command, &r);
+    // The file is saved; a version that could not be made is said, not hidden.
+    if let Ok(v) = &r
+        && let Some(e) = v.get("version_error").and_then(Value::as_str)
+    {
+        app.set_status(crate::i18n::format("storage.version_failed", &[("reason", e)]), true);
+    }
     crate::documents::saved_for_close(app);
 }
 
