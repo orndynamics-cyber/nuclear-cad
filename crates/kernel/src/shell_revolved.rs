@@ -20,7 +20,7 @@
 
 use std::collections::BTreeSet;
 
-use solidcraft_geom::{Loop2, Plane, Region2, Seg2, Vec2, Vec3};
+use solidcraft_geom::{Loop2, MAX_BEZIER_CTRL, MAX_BEZIER_DEGREE, Plane, Region2, Seg2, Vec2, Vec3};
 use truck_modeling::{self as mt, InnerSpace, Transform};
 
 use crate::body::{Body, from_p3};
@@ -111,7 +111,7 @@ pub(crate) fn shell(b: &Body, opened: &[usize], thickness: f64) -> Result<Option
         let Some(segs) = meridian_of(f, &frame, tol) else {
             return Ok(skip(&format!("face {i} is not swept about the axis ({})", kind(f))));
         };
-        let piece = Piece { segs, faces: vec![i] };
+        let piece = Piece { segs: merged_runs(segs, tol), faces: vec![i] };
         let (Some(s), Some(e), Some(m)) = (piece.start(), piece.end(), piece.mid()) else { return Ok(None) };
         // Angular patches of one turn: the same run of the meridian.
         let same = pieces.iter_mut().find(|q| {
@@ -557,7 +557,7 @@ fn swept_meridian(f: &mt::Face, frame: &Frame, pts: &[Vec2], tol: f64) -> Option
     let samples: Vec<Vec2> = (0..=32).map(|k| meridian(s0 + (s1 - s0) * k as f64 / 32.0)).collect();
     match arc_on(&samples, tol * 0.1) {
         Some(arc) => out.push(arc),
-        None => fit(&|s| Some(meridian(s)), s0, s1, tol * 0.1, 0, &mut out)?,
+        None => fit_few(&|s| Some(meridian(s)), s0, s1, tol * 0.1, 0, &mut out)?,
     }
     // Every point of the face on the meridian turned round: the face is that surface of
     // revolution, not just close to one where it was sampled.
@@ -838,25 +838,45 @@ impl Moved {
     fn free_at(seg: &Seg2, d: f64, t: f64) -> Option<Vec2> {
         Some(seg.point_at(t) + seg.derivative(t).normalized()?.perp() * d)
     }
-    fn free_tangent(seg: &Seg2, d: f64, t: f64) -> Option<Vec2> {
-        let h = 1e-6;
-        let (a, b) = ((t - h).max(0.0), (t + h).min(1.0));
-        Some((Moved::free_at(seg, d, b)? - Moved::free_at(seg, d, a)?) * (1.0 / (b - a)))
-    }
     fn at(&self, t: f64) -> Option<Vec2> {
         match *self {
             Moved::Line { a, b } => Some(a.lerp(b, t)),
             Moved::Arc { center, radius, start, sweep } => Some(center + Vec2::from_angle(start + sweep * t) * radius),
             Moved::Free { seg, d } => {
-                if t < 0.0 {
-                    Some(Moved::free_at(&seg, d, 0.0)? + Moved::free_tangent(&seg, d, 0.0)? * t)
-                } else if t > 1.0 {
-                    Some(Moved::free_at(&seg, d, 1.0)? + Moved::free_tangent(&seg, d, 1.0)? * (t - 1.0))
+                // The curve runs on as itself as far as it keeps its way, then straight on.
+                let (lo, hi) = Moved::natural(&seg);
+                if t < lo {
+                    Some(Moved::free_at(&seg, d, lo)? + Moved::run_tangent(&seg, d, lo)? * (t - lo))
+                } else if t > hi {
+                    Some(Moved::free_at(&seg, d, hi)? + Moved::run_tangent(&seg, d, hi)? * (t - hi))
                 } else {
                     Moved::free_at(&seg, d, t)
                 }
             }
         }
+    }
+    /// How far past its ends (in its own parameter) a free curve runs on as itself: up to a
+    /// quarter of its span while its direction turns less than 30 degrees, so the inner wall
+    /// past a wall's end continues the same surface (one face) instead of a separate straight
+    /// strip; past that, straight along the tangent.
+    fn natural(seg: &Seg2) -> (f64, f64) {
+        let turn_ok = |end: f64, far: f64| {
+            let (a, b) = (seg.derivative(end).normalized(), seg.derivative(far).normalized());
+            a.zip(b).is_some_and(|(a, b)| {
+                (0..=8).all(|k| {
+                    let t = end + (far - end) * k as f64 / 8.0;
+                    seg.derivative(t).normalized().is_some_and(|x| x.dot(a) > 0.866)
+                }) && b.dot(a) > 0.866
+            })
+        };
+        let lo = if turn_ok(0.0, -0.25) { -0.25 } else { 0.0 };
+        let hi = if turn_ok(1.0, 1.25) { 1.25 } else { 1.0 };
+        (lo, hi)
+    }
+    /// The moved curve's tangent at `t`, which may lie past its ends.
+    fn run_tangent(seg: &Seg2, d: f64, t: f64) -> Option<Vec2> {
+        let h = 1e-6;
+        Some((Moved::free_at(seg, d, t + h)? - Moved::free_at(seg, d, t - h)?) * (0.5 / h))
     }
     fn tangent(&self, t: f64) -> Option<Vec2> {
         let h = 1e-7;
@@ -866,9 +886,10 @@ impl Moved {
     /// parameter; `None` when it does not between `from` and `to`.
     fn folds(&self, from: f64, to: f64) -> Option<f64> {
         let Moved::Free { seg, d } = *self else { return None };
-        let (a, b) = (from.max(0.0), to.min(1.0));
+        let (lo, hi) = Moved::natural(&seg);
+        let (a, b) = (from.max(lo), to.min(hi));
         (0..=64).map(|k| a + (b - a) * k as f64 / 64.0).find(|&t| {
-            let (Some(q), p) = (Moved::free_tangent(&seg, d, t), seg.derivative(t)) else { return false };
+            let (Some(q), p) = (Moved::run_tangent(&seg, d, t), seg.derivative(t)) else { return false };
             q.dot(p) <= 0.0
         })
     }
@@ -881,21 +902,147 @@ impl Moved {
             }
             Moved::Free { .. } => {
                 let mut out = Vec::new();
-                // Run-on parts are straight; the curve's own part is fitted.
-                if t0 < 0.0 {
-                    out.push(Seg2::Line { a: self.at(t0)?, b: self.at(t1.min(0.0))? });
+                // Past where the curve runs on as itself the wall goes straight; the rest is fitted.
+                let Moved::Free { seg, .. } = *self else { return None };
+                let (lo, hi) = Moved::natural(&seg);
+                if t0 < lo {
+                    out.push(Seg2::Line { a: self.at(t0)?, b: self.at(t1.min(lo))? });
                 }
-                let (c0, c1) = (t0.max(0.0), t1.min(1.0));
+                let (c0, c1) = (t0.max(lo), t1.min(hi));
                 if c1 > c0 + 1e-12 {
-                    fit(&|t| self.at(t), c0, c1, tol, 0, &mut out)?;
+                    fit_few(&|t| self.at(t), c0, c1, tol, 0, &mut out)?;
                 }
-                if t1 > 1.0 {
-                    out.push(Seg2::Line { a: self.at(t0.max(1.0))?, b: self.at(t1)? });
+                if t1 > hi {
+                    out.push(Seg2::Line { a: self.at(t0.max(hi))?, b: self.at(t1)? });
                 }
                 Some(out)
             }
         }
     }
+}
+
+/// `segs` with runs of one circle (an arc stored as several rational spans) or one line joined:
+/// one face's meridian is one curve where it can be, so its inner wall is one face too.
+fn merged_runs(segs: Vec<Seg2>, tol: f64) -> Vec<Seg2> {
+    let mut out: Vec<Seg2> = Vec::with_capacity(segs.len());
+    for s in segs {
+        let joined = match (out.last().copied(), s) {
+            (Some(Seg2::Arc { center, radius, start, sweep }), Seg2::Arc { center: c2, radius: r2, sweep: w2, .. })
+                if center.dist(c2) < tol && (radius - r2).abs() < tol && sweep * w2 > 0.0 && (sweep + w2).abs() < std::f64::consts::TAU =>
+            {
+                Some(Seg2::Arc { center, radius, start, sweep: sweep + w2 })
+            }
+            (Some(Seg2::Line { a, b }), Seg2::Line { a: _, b: c }) => {
+                let along = (b - a).normalized().zip((c - b).normalized()).is_some_and(|(u, v)| u.dot(v) > 0.0);
+                (along && (c - a).normalized().is_some_and(|d| (b - a).cross(d).abs() < tol)).then_some(Seg2::Line { a, b: c })
+            }
+            _ => None,
+        };
+        match (joined, out.last_mut()) {
+            (Some(j), Some(last)) if last.end().dist(s.start()) < tol => *last = j,
+            _ => out.push(s),
+        }
+    }
+    out
+}
+
+/// As few Bézier pieces through `f` from `t0` to `t1` as keep within `tol` of it: one piece of
+/// the lowest degree (up to [`MAX_BEZIER_DEGREE`]) that does, else the halves the same way, so
+/// a smooth wall stays one face rather than one face per short cubic.
+fn fit_few(f: &dyn Fn(f64) -> Option<Vec2>, t0: f64, t1: f64, tol: f64, depth: u32, out: &mut Vec<Seg2>) -> Option<()> {
+    if let Some(seg) = (3..=MAX_BEZIER_DEGREE).find_map(|n| bezier_fit(f, t0, t1, n, tol)) {
+        out.push(seg);
+        return Some(());
+    }
+    if depth >= 4 {
+        return fit(f, t0, t1, tol, 0, out);
+    }
+    let m = (t0 + t1) * 0.5;
+    fit_few(f, t0, m, tol, depth + 1, out)?;
+    fit_few(f, m, t1, tol, depth + 1, out)
+}
+
+/// The Bézier of degree `n` through `f`'s ends with its end derivatives (so neighbours meet as
+/// before), the rest least-squares fitted; `None` unless every one of 256 samples lies within
+/// `tol` of `f` at the same parameter (which bounds the distance between the curves both ways).
+fn bezier_fit(f: &dyn Fn(f64) -> Option<Vec2>, t0: f64, t1: f64, n: usize, tol: f64) -> Option<Seg2> {
+    let h = (t1 - t0) * 1e-5;
+    let d = |t: f64| -> Option<Vec2> {
+        let (a, b) = ((t - h).max(t0), (t + h).min(t1));
+        Some((f(b)? - f(a)?) * ((t1 - t0) / (b - a)))
+    };
+    let at = |s: f64| f(t0 + (t1 - t0) * s);
+    let binom = |k: usize| (0..k).fold(1.0, |c, i| c * (n - i) as f64 / (i + 1) as f64);
+    let basis = |j: usize, s: f64| binom(j) * s.powi(j as i32) * (1.0 - s).powi((n - j) as i32);
+    let mut p = [Vec2::ZERO; MAX_BEZIER_CTRL];
+    let (p0, pn) = (at(0.0)?, at(1.0)?);
+    let fixed = [(0, p0), (1, p0 + d(t0)? * (1.0 / n as f64)), (n - 1, pn - d(t1)? * (1.0 / n as f64)), (n, pn)];
+    for &(j, q) in &fixed {
+        *p.get_mut(j)? = q;
+    }
+    // The free control points 2..n-2 by least squares over samples inside the span.
+    let free: Vec<usize> = (2..n.saturating_sub(1)).collect();
+    if !free.is_empty() {
+        let m = free.len();
+        let mut a = vec![vec![0.0; m]; m];
+        let mut rhs = vec![Vec2::ZERO; m];
+        for k in 1..64 {
+            let s = k as f64 / 64.0;
+            let mut rest = at(s)?;
+            for &(j, q) in &fixed {
+                rest -= q * basis(j, s);
+            }
+            for (r, &i) in free.iter().enumerate() {
+                let bi = basis(i, s);
+                for (c, &j) in free.iter().enumerate() {
+                    *a.get_mut(r)?.get_mut(c)? += bi * basis(j, s);
+                }
+                *rhs.get_mut(r)? = *rhs.get(r)? + rest * bi;
+            }
+        }
+        for (r, x) in solve(a, rhs)?.into_iter().enumerate() {
+            *p.get_mut(*free.get(r)?)? = x;
+        }
+    }
+    let seg = if n == 3 { Seg2::Cubic { p0, p1: *p.get(1)?, p2: *p.get(2)?, p3: pn } } else { Seg2::Bezier { n: u8::try_from(n).ok()?, p } };
+    let within = (0..=256).all(|k| {
+        let s = k as f64 / 256.0;
+        at(s).is_some_and(|x| x.dist(seg.point_at(s)) <= tol)
+    });
+    within.then_some(seg)
+}
+
+/// `a x = b` by Gaussian elimination with partial pivoting; `None` when `a` is singular.
+fn solve(mut a: Vec<Vec<f64>>, mut b: Vec<Vec2>) -> Option<Vec<Vec2>> {
+    let m = b.len();
+    let at = |a: &Vec<Vec<f64>>, r: usize, c: usize| a.get(r).and_then(|row| row.get(c)).copied();
+    for c in 0..m {
+        let piv = (c..m).max_by(|&x, &y| at(&a, x, c).unwrap_or(0.0).abs().total_cmp(&at(&a, y, c).unwrap_or(0.0).abs()))?;
+        a.swap(c, piv);
+        b.swap(c, piv);
+        let lead = at(&a, c, c)?;
+        if lead.abs() < 1e-300 {
+            return None;
+        }
+        let (pivot_row, pivot_b) = (a.get(c)?.clone(), *b.get(c)?);
+        for r in c + 1..m {
+            let k = at(&a, r, c)? / lead;
+            for (x, y) in a.get_mut(r)?.iter_mut().zip(&pivot_row).skip(c) {
+                *x -= k * y;
+            }
+            let br = b.get_mut(r)?;
+            *br -= pivot_b * k;
+        }
+    }
+    let mut x = vec![Vec2::ZERO; m];
+    for r in (0..m).rev() {
+        let mut v = *b.get(r)?;
+        for j in r + 1..m {
+            v -= *x.get(j)? * at(&a, r, j)?;
+        }
+        *x.get_mut(r)? = v * (1.0 / at(&a, r, r)?);
+    }
+    Some(x)
 }
 
 /// Cubic Hermite pieces through `f` from `t0` to `t1`, halved until each is within `tol` of it.

@@ -3275,3 +3275,45 @@ fn shell_of_a_spline_vase_rounded_or_read_from_step() {
     assert!(s.validity().is_empty(), "{:?}", s.validity());
     assert!(rel(measure(&s).unwrap().volume, 24755.43) < 5e-4, "{}", measure(&s).unwrap().volume);
 }
+
+/// Shell of a body of revolution keeps its walls whole: each wall's inner side is one swept
+/// curve (three patches round, as the outer wall is), not one face per short fitted piece.
+#[test]
+fn shell_of_a_body_of_revolution_keeps_one_inner_face_per_wall() {
+    let revolve = |walls: Vec<Seg2>| {
+        let (first, last) = (walls.first().unwrap().start(), walls.last().unwrap().end());
+        let mut segs = vec![Seg2::Line { a: Vec2::new(0.0, first.y), b: first }];
+        segs.extend(walls);
+        segs.push(Seg2::Line { a: last, b: Vec2::new(0.0, last.y) });
+        segs.push(Seg2::Line { a: Vec2::new(0.0, last.y), b: Vec2::new(0.0, first.y) });
+        let r = Region2 { outer: Loop2 { segs }, holes: vec![] };
+        revolve_whole(&Plane::YZ, &[r], Vec2::ZERO, Vec2::new(0.0, 1.0), 2.0 * PI).unwrap().pop().unwrap()
+    };
+    let line = |a: (f64, f64), b: (f64, f64)| Seg2::Line { a: Vec2::new(a.0, a.1), b: Vec2::new(b.0, b.1) };
+    let (_, spline) = spline_vase();
+    let (c1, r1) = (Vec2::new(5.0, 30.0), 1125f64.sqrt());
+    let u = Vec2::from_angle(60f64.to_radians());
+    let (p, c2) = (c1 + u * r1, c1 + u * (r1 + 10.0));
+    let top = Vec2::new(c2.x - (100.0 - (70.0 - c2.y).powi(2)).sqrt(), 70.0);
+    let (a0, b0, b1) = ((Vec2::new(20.0, 0.0) - c1).angle(), (p - c2).angle(), (top - c2).angle());
+    let arcs = revolve(vec![
+        Seg2::Arc { center: c1, radius: r1, start: a0, sweep: 60f64.to_radians() - a0 },
+        Seg2::Arc { center: c2, radius: 10.0, start: b0, sweep: (b1 - b0 + 2.0 * PI) % (2.0 * PI) - 2.0 * PI },
+    ]);
+    // (name, body, top, walls): a wall's outside and inside are three faces each, the rim three
+    // and the two floors one each.
+    let fixtures = [
+        ("cylinder", revolve(vec![line((20.0, 0.0), (20.0, 40.0))]), 40.0, 1),
+        ("frustum", revolve(vec![line((20.0, 0.0), (12.0, 40.0))]), 40.0, 1),
+        ("spline vase", spline, 70.0, 1),
+        ("arc vase", arcs, 70.0, 2),
+        ("sharp transition", revolve(vec![line((20.0, 0.0), (26.0, 30.0)), line((26.0, 30.0), (15.0, 60.0))]), 60.0, 2),
+    ];
+    for (name, body, top, walls) in fixtures {
+        for t in [0.5, 2.0] {
+            let s = shell(&body, &[Vec3::new(3.0, 3.0, top)], t).unwrap_or_else(|e| panic!("{name}, t {t}: {e}"));
+            assert!(s.validity().is_empty(), "{name}, t {t}: {:?}", s.validity());
+            assert_eq!(s.face_count(), 2 + 3 * (2 * walls + 1), "{name}, t {t}: {} faces from {}", s.face_count(), body.face_count());
+        }
+    }
+}
