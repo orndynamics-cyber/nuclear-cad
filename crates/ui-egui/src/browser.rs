@@ -1050,17 +1050,33 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
     let kind = if collapsible { egui::WidgetType::Button } else { egui::WidgetType::Label };
     response.widget_info(|| egui::WidgetInfo::labeled(kind, true, &title));
     let galley = ui.painter().layout_no_wrap(title, crate::fonts::semibold(t.font_heading), t.text);
+    let title_right = rect.left() + t.space_6 + galley.size().x;
     ui.painter().galley(pos2(rect.left() + t.space_6, rect.center().y - galley.size().y / 2.0), galley, t.text);
     let mut right = rect.right() - t.space_6;
     if collapsible {
         crate::ui_kit::disclosure(ui.painter(), pos2(right - t.form_section_icon_size / 2.0, rect.center().y), !collapsed, t.text_dim);
         right -= 18.0;
     }
+    // The step menu for dragged arrows sits at the row's end, the body count before it
+    // (`manipulator_step`). A narrow card (or a long title in another language) drops the count
+    // first, then the menu, rather than cover the title.
+    let label = crate::i18n::format("ui.step_button", &[("step", &crate::manipulator_step::summary(app))]);
+    let width = ui.painter().layout_no_wrap(label, FontId::proportional(t.font_label), t.form_ink).size().x + t.space_8;
     let bodies = app.session.model.state().bodies.len();
     let key = if bodies == 1 { "ui.browser_bodies_one" } else { "ui.browser_bodies_other" };
     let count = crate::i18n::format(key, &[("count", &bodies.to_string())]);
     let galley = ui.painter().layout_no_wrap(count, FontId::proportional(t.font_body), t.text_dim);
-    ui.painter().galley(pos2(right - galley.size().x, rect.center().y - galley.size().y / 2.0), galley, t.text_dim);
+    let step_rect = egui::Rect::from_min_max(
+        pos2(right - width, rect.center().y - t.control_height / 2.0),
+        pos2(right, rect.center().y + t.control_height / 2.0),
+    );
+    let with_step = step_rect.left() > title_right + t.space_8;
+    if with_step {
+        right = step_rect.left() - t.space_8;
+    }
+    if right - galley.size().x > title_right + t.space_8 {
+        ui.painter().galley(pos2(right - galley.size().x, rect.center().y - galley.size().y / 2.0), galley, t.text_dim);
+    }
     if collapsible {
         let tip = crate::i18n::tr(if collapsed { "ui.browser_expand" } else { "ui.browser_collapse" });
         if response.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked() {
@@ -1072,6 +1088,11 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
                 app.tree.panel_collapsed = !app.tree.panel_collapsed;
             }
         }
+    }
+    // After the header's own response, so a click on the menu opens it instead of folding.
+    if with_step {
+        let mut step_ui = ui.new_child(egui::UiBuilder::new().id_salt("browser_step").max_rect(step_rect));
+        crate::manipulator_step::menu(app, &mut step_ui);
     }
 }
 
@@ -2802,7 +2823,7 @@ pub(crate) fn occurrence_triad(app: &mut SolveApp, ui: &mut egui::Ui, painter: &
     let Some(mut m) = app.tree.occurrence_move.clone() else { return };
     let before = (m.translate, m.angles);
     let Some(t) = occurrence_triad_model(app) else { return };
-    let step = crate::canvas::snap_step(app.cam.half_height());
+    let step = crate::manipulator_step::linear(proj, t.center);
     let Some(g) = gizmo::show(ui, painter, proj, egui::Id::new("sc_occ_triad"), &t, step) else { return };
     if g.started || m.drag0.is_none() {
         m.drag0 = Some((m.translate, m.angles));

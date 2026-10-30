@@ -1,7 +1,7 @@
 //! The move/rotate triad shared by Move/Copy and occurrence moves: X/Y/Z arrows, XY/YZ/XZ plane
 //! squares, X/Y/Z rotation rings and a centre ball for a free drag in the view plane. It is a
-//! constant size on screen. A drag reports its change since the drag began (distances snap to
-//! round steps at the current zoom, angles to 5°; hold Alt or Ctrl for a free drag), so the caller
+//! constant size on screen. A drag reports its change since the drag began (distances and angles
+//! snap to the step the step menu chooses, `manipulator_step`; hold Alt or Ctrl for a free drag), so the caller
 //! adds it to the values it had when the drag started.
 
 use std::cell::RefCell;
@@ -223,7 +223,7 @@ fn hit(s: &Shapes, p: Pos2) -> Option<Handle> {
 }
 
 /// Millimetres per screen pixel at a point.
-fn mm_per_px(proj: &Proj, c: Vec3) -> Option<f64> {
+pub(crate) fn mm_per_px(proj: &Proj, c: Vec3) -> Option<f64> {
     let (_, view) = proj.ray(proj.to_screen(c)?);
     let u = view.any_perp().normalized()?;
     let (a, b) = (proj.to_screen(c)?, proj.to_screen(c + u)?);
@@ -237,7 +237,7 @@ pub(crate) fn ring_radius(proj: &Proj, centre: Vec3) -> Option<f64> {
 }
 
 fn snap(v: f64, step: f64, free: bool) -> f64 {
-    if free || step <= 0.0 { v } else { (v / step).round() * step }
+    if free || step <= 0.0 { v } else { crate::manipulator_step::snap(v, step) }
 }
 
 /// Discard a suspended pointer gesture without reporting a final model change.
@@ -384,7 +384,7 @@ pub fn show(ui: &mut egui::Ui, painter: &egui::Painter, proj: &Proj, id: egui::I
                 st.turned += d;
                 st.last = th;
             }
-            Change::Rotate { axis: i, angle: snap(st.turned, 5f64.to_radians(), free) }
+            Change::Rotate { axis: i, angle: snap(st.turned, crate::manipulator_step::angle_deg().to_radians(), free) }
         }
         h => {
             let d = on_plane(proj, p, st.center, plane_normal(h)).map(|q| q - st.grab).unwrap_or(Vec3::ZERO);
