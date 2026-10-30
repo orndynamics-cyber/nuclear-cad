@@ -169,6 +169,60 @@ fn shell_thicker_than_a_step_says_so() {
     assert!(e.to_string().contains("not supported yet"), "{e}");
 }
 
+/// A vase revolved from a fit-point spline, shelled from its top cap: it was refused at the
+/// offset step ("only bodies with planes, cylinders, cones, spheres and tori"). Now the shell is
+/// a sound body whatever the way to it: previewed (the design untouched), committed (as
+/// previewed), undone and redone, its thickness edited, saved and reopened, and the vase read
+/// back from STEP. A thickness the vase can't take is refused and leaves it whole.
+#[test]
+fn shell_of_a_vase_revolved_from_a_spline() {
+    let vase = json!([
+        {"command": "sketch.create", "params": {"plane": "YZ"}},
+        {"command": "sketch.line", "params": {"points": [[20, 70], [0, 70], [0, 0], [20, 0]]}},
+        {"command": "sketch.spline.fit_point", "params": {"points": [[20, 0], [32, 20], [30, 40], [18, 60], [20, 70]]}},
+        {"command": "sketch.finish", "params": {}},
+        {"command": "solid.revolve", "params": {"axis": "Z"}}
+    ]);
+    let rel = |a: f64, b: f64| (a - b).abs() / b.abs();
+    let shell = |t: f64| json!({"faces": [[3.0, 3.0, 70.0]], "thickness": t});
+    let mut s = script(vase.clone());
+    let solid = volume(&mut s);
+    let e = s.execute("solid.shell", &shell(25.0)).unwrap_err();
+    assert!(e.to_string().contains("too thick"), "{e}");
+    assert_eq!(volume(&mut s), solid);
+    let preview = s.preview(&[("solid.shell".into(), shell(2.0))]).unwrap();
+    let previewed = solidcraft_kernel::measure(&preview.after.bodies[0].body).unwrap().volume;
+    assert_eq!(volume(&mut s), solid, "the preview changed the design");
+    run(&mut s, "solid.shell", shell(2.0));
+    let walls = volume(&mut s);
+    assert!(rel(walls, previewed) < 1e-9, "{walls} committed, {previewed} previewed");
+    assert!(walls > solid * 0.1 && walls < solid * 0.25, "{walls} of {solid}");
+    assert!(s.model.state().bodies.iter().all(|b| b.body.validity().is_empty()));
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(volume(&mut s), solid);
+    run(&mut s, "edit.redo", json!({}));
+    assert!(rel(volume(&mut s), walls) < 1e-9);
+    run(&mut s, "timeline.edit", json!({"feature": "Shell1", "set": {"thickness": "3 mm"}}));
+    let thicker = volume(&mut s);
+    assert!(thicker > walls * 1.3 && s.model.state().bodies.iter().all(|b| b.body.validity().is_empty()), "{thicker}");
+    let dir = std::env::temp_dir().join(format!("solidcraft-vase-shell-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let design = dir.join("vase.solidcraft");
+    run(&mut s, "file.save_as", json!({"path": design.to_string_lossy()}));
+    let mut reopened = Session::default();
+    run(&mut reopened, "doc.open", json!({"path": design.to_string_lossy()}));
+    assert!(rel(volume(&mut reopened), thicker) < 1e-9);
+    // The vase (before the shell) through STEP: read back, the same shell.
+    let mut plain = script(vase);
+    let step = dir.join("vase.step");
+    run(&mut plain, "file.export", json!({"path": step.to_string_lossy()}));
+    let mut read = Session::default();
+    run(&mut read, "file.insert_step", json!({"path": step.to_string_lossy()}));
+    run(&mut read, "solid.shell", shell(2.0));
+    assert!(rel(volume(&mut read), walls) < 1e-3, "{} vs {walls}", volume(&mut read));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// Panics inside the kernel are caught natively, but abort the web build (wasm can't unwind).
 /// Building the samples must not panic at all (the Plastic Enclosure's bosses used to, 8 times).
 #[test]
