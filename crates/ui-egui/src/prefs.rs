@@ -479,7 +479,7 @@ fn window_page<const INDEX: usize>(ui: &mut egui::Ui, app: &mut SolveApp) {
 pub const THEMES: &[(&str, &str)] = &[("system", "System")];
 /// The theme files Follow System uses for a dark and a light system.
 /// The appearance settings' migration version (see [`lenient`]).
-pub const APPEARANCE_VERSION: u32 = 2;
+pub const APPEARANCE_VERSION: u32 = 3;
 pub const SYSTEM_DARK: &str = "nuclear-graphite";
 pub const SYSTEM_LIGHT: &str = "nuclear-light";
 
@@ -746,7 +746,9 @@ pub fn apply_file_limits(p: &Prefs) {
 
 /// The browser sidebar's first width, and the width [`Prefs::default`] restores; the panel
 /// itself clamps what the user drags to its own range.
-pub const DEFAULT_BROWSER_WIDTH: f32 = 250.0;
+pub const DEFAULT_BROWSER_WIDTH: f32 = 276.0;
+/// The browser's default width before the Nuclear sidebar (appearance version 3).
+const OLD_DEFAULT_BROWSER_WIDTH: f32 = 250.0;
 
 /// The browser's first share of the column it shares with History under it (#7371): the equal
 /// split; the column clamps what the user drags so both cards keep their header and two rows.
@@ -1035,6 +1037,12 @@ preference_settings! {
     /// Keep the SKETCH tab in the ribbon, right after MODEL, while no sketch is open; its drawing
     /// tools then start a sketch first (#7904).
     sketch_tab_always: bool = false, PAGE_INTERFACE => check_id("prefs.sketch_tab_always");
+    /// The browser fills the left side from under the ribbon to the History (Nuclear's
+    /// continuous sidebar); off, it hugs its tree as before.
+    browser_full_height: bool = true, PAGE_INTERFACE => check_id("prefs.browser_full_height");
+    /// Outside a sketch the minor grid lines are faint (Nuclear's quieter grid); off, they are
+    /// drawn at full strength as before. Inside a sketch they are always at full strength.
+    quiet_grid: bool = true, PAGE_INTERFACE => check_id("prefs.quiet_grid");
     /// Where a dialog's OK and Cancel sit: under its inputs (the default) or in its title row (#6708).
     dialog_buttons: crate::ui_kit::DialogButtons = Default::default(), PAGE_INTERFACE;
     /// Where notices and offers stack: the view's bottom-right corner (the default) or the bottom
@@ -3182,6 +3190,17 @@ pub fn lenient(saved: &serde_json::Value) -> Prefs {
     // id all land on a Nuclear theme. Nuclear variants, System, the other theme files and the
     // viewport's own settings are kept. Saved back as resolved, so it never alternates.
     p.theme = canonical_theme(&p.theme, &p.custom_themes);
+    // 3: the Nuclear HUD. Settings saved before it carry the old defaults whether or not they were
+    // chosen: the floating layout becomes the docked one and the old browser width the new one.
+    // Floating stays one click away (Interface › Workspace), and any other width is kept.
+    if p.nuclear_appearance < 3 {
+        if p.layout == crate::shell::LayoutMode::Floating {
+            p.layout = crate::shell::LayoutMode::Docked;
+        }
+        if p.browser_width == OLD_DEFAULT_BROWSER_WIDTH {
+            p.browser_width = DEFAULT_BROWSER_WIDTH;
+        }
+    }
     p.nuclear_appearance = APPEARANCE_VERSION;
     p
 }
@@ -5915,6 +5934,23 @@ mod tests {
         assert!(!h.app.preferences.radial_context_menu, "Navigation defaults disable the ring");
         h.call("ui.prefs", json!({"button":"cancel"}));
         assert!(h.app.preferences.radial_context_menu, "Cancel restores the last Apply");
+    }
+
+    /// The Nuclear HUD: a fresh install is docked with a full-height browser at the new width;
+    /// settings saved before it move once from the old floating default and 250 px width, a
+    /// width the user set stays, and a later explicit choice of Floating is kept.
+    #[test]
+    fn nuclear_hud_defaults_and_migration() {
+        use crate::shell::LayoutMode;
+        let fresh = Prefs::default();
+        assert_eq!((fresh.layout, fresh.browser_full_height, fresh.browser_width), (LayoutMode::Docked, true, DEFAULT_BROWSER_WIDTH));
+        let old = lenient(&json!({"layout": "floating", "browser_width": OLD_DEFAULT_BROWSER_WIDTH, "nuclear_appearance": 2}));
+        assert_eq!((old.layout, old.browser_width), (LayoutMode::Docked, DEFAULT_BROWSER_WIDTH));
+        let chosen_width = lenient(&json!({"browser_width": 320.0, "nuclear_appearance": 2}));
+        assert_eq!(chosen_width.browser_width, 320.0);
+        let chosen = lenient(&json!({"layout": "floating", "nuclear_appearance": APPEARANCE_VERSION}));
+        assert_eq!(chosen.layout, LayoutMode::Floating);
+        assert_eq!(lenient(&serde_json::to_value(&chosen).unwrap()).layout, LayoutMode::Floating);
     }
 
     /// Preferences saved before the Nuclear themes move from the old default Dark and Light to

@@ -194,6 +194,10 @@ impl Harness {
             cam_mark: None,
         };
         WIDTHS.with(|m| m.borrow_mut().clear());
+        // Scenarios keep the floating cards their measured geometry was written for; Nuclear's
+        // docked default is exercised by the scenarios that ask for it (`ui.set` `layout`).
+        h.app.preferences.layout = crate::shell::LayoutMode::Floating;
+        h.app.ui.layout = crate::shell::LayoutMode::Floating;
         h.install();
         h.ctx.enable_accesskit();
         h.frames(3);

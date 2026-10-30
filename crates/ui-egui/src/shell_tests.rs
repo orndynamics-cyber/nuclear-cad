@@ -4,6 +4,8 @@ use serde_json::json;
 
 #[test]
 fn modes_are_transient_and_available_to_control_and_scenarios() {
+    // Nuclear starts docked; scenarios start from the floating cards.
+    assert_eq!(crate::SolveApp::new(Default::default(), Default::default()).ui.layout, LayoutMode::Docked);
     let mut h = Harness::new();
     assert_eq!(h.app.ui.layout, LayoutMode::Floating);
     let prefs = serde_json::to_value(&h.app.preferences).unwrap();
@@ -69,6 +71,8 @@ fn both_modes_keep_their_geometry_and_fit_clear_of_covered_rects() {
 #[test]
 fn cards_block_model_hover_wheel_and_drag_but_the_gap_remains_viewport() {
     let mut h = Harness::new();
+    // The floating cards (the layout before Nuclear's docked default).
+    h.call("ui.set", json!({"layout":"floating"}));
     h.app.run("solid.box", json!({"length":40,"width":30,"height":20})).unwrap();
     h.settle();
     let ribbon = rect_of("ribbon:card").unwrap();
@@ -92,8 +96,11 @@ fn cards_block_model_hover_wheel_and_drag_but_the_gap_remains_viewport() {
 #[test]
 fn floating_sketch_palette_and_compass_share_measured_clearance() {
     for style in crate::prefs::NavigatorStyle::ALL {
-        for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 720.0, 2.0)] {
+        // At scale 2 the taller ribbon takes 28 more pixels: the view keeps its height.
+        for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 748.0, 2.0)] {
             let mut h = Harness::new();
+            // The floating cards (the layout before Nuclear's docked default).
+            h.call("ui.set", json!({"layout":"floating"}));
             h.app.preferences.navigator_style = style;
             h.call("ui.resize", json!({"width":width,"height":height}));
             h.call("ui.prefs", json!({"ui_scale":scale}));
@@ -127,8 +134,12 @@ fn floating_sketch_palette_and_compass_share_measured_clearance() {
 #[test]
 fn short_floating_palette_stays_in_viewport() {
     for style in crate::prefs::NavigatorStyle::ALL {
-        for height in [475, 385, 300] {
+        // At scale 2, Nuclear's 14 pt taller ribbon takes 28 more pixels; the view keeps the
+        // heights these cases were written for.
+        for height in [503, 413, 328] {
             let mut h = Harness::new();
+            // The floating cards (the layout before Nuclear's docked default).
+            h.call("ui.set", json!({"layout":"floating"}));
             h.app.preferences.navigator_style = style;
             h.call("ui.resize", json!({"width":700,"height":height}));
             h.call("ui.prefs", json!({"ui_scale":2.0}));
@@ -138,7 +149,7 @@ fn short_floating_palette_stays_in_viewport() {
                 h.app.run("sketch.line", json!({"points":points,"infer":false,"connect":false})).unwrap();
             }
             // Include the extra Feature Options section in the tiny-height case.
-            if height == 300 {
+            if height == 328 {
                 h.app.start("sketch.rectangle.two_point");
             }
             h.settle();
@@ -172,6 +183,8 @@ fn short_floating_palette_stays_in_viewport() {
 #[test]
 fn selection_drag_released_over_a_card_leaves_no_rubber_band() {
     let mut h = Harness::new();
+    // The floating cards (the layout before Nuclear's docked default).
+    h.call("ui.set", json!({"layout":"floating"}));
     h.call("ui.resize", json!({"width":1400,"height":900}));
     h.settle();
     let ribbon = rect_of("ribbon:card").unwrap();
@@ -245,6 +258,8 @@ fn floating_browser_clears_cards_shields_input_and_can_dock_again() {
 #[test]
 fn browser_and_history_cards_block_input_while_their_gaps_and_space_below_browser_do_not() {
     let mut h = Harness::new();
+    // The floating cards (the layout before Nuclear's docked default).
+    h.call("ui.set", json!({"layout":"floating"}));
     h.call("ui.resize", json!({"width":1400,"height":900}));
     h.app.run("solid.box", json!({"length":40,"width":30,"height":20})).unwrap();
     h.settle();
@@ -316,6 +331,8 @@ fn assistant_floats_without_changing_projection_and_shields_the_model() {
     for dark in [false, true] {
         for side in ["left", "right"] {
             let mut h = crate::scenario::Harness::new();
+            // The floating cards (the layout before Nuclear's docked default).
+            h.call("ui.set", json!({"layout":"floating"}));
             h.app.home.open = false;
             h.call("ui.resize", serde_json::json!({"width":1400,"height":1000}));
             h.call("ui.set", serde_json::json!({"dark":dark,"layout":"floating"}));
@@ -586,6 +603,8 @@ fn tool_sheet_dropdowns_and_preferences_still_open_above_the_sheet() {
 #[test]
 fn compact_layout_is_saved_and_survives_cancel_apply_defaults_and_bad_input() {
     let mut h = Harness::new();
+    // From the floating layout (the one before Nuclear's docked default).
+    h.call("ui.prefs", json!({"layout":"floating"}));
     h.app.run("solid.box", json!({"length":10,"width":10,"height":10})).unwrap();
     h.app.start("solid.extrude");
     h.settle();
@@ -617,17 +636,18 @@ fn compact_layout_is_saved_and_survives_cancel_apply_defaults_and_bad_input() {
     h.call("ui.prefs", json!({"layout":"compact"}));
     h.call("ui.prefs", json!({"button":"cancel"}));
     assert_eq!(h.app.ui.layout, LayoutMode::Floating);
-    h.call("ui.prefs", json!({"open":"Interface","layout":"compact"}));
+    // Defaults restore Nuclear's docked layout.
+    h.call("ui.prefs", json!({"open":"Interface","layout":"floating"}));
     h.call("ui.prefs", json!({"button":"defaults"}));
-    assert_eq!(h.app.ui.layout, LayoutMode::Floating);
-    assert_eq!(h.app.preferences.layout, LayoutMode::Floating);
+    assert_eq!(h.app.ui.layout, LayoutMode::Docked);
+    assert_eq!(h.app.preferences.layout, LayoutMode::Docked);
     h.call("ui.prefs", json!({"button":"ok"}));
     assert!(crate::prefs::set(&mut h.app, &json!({"layout":"invalid"})).is_err());
-    assert_eq!(h.app.ui.layout, LayoutMode::Floating);
+    assert_eq!(h.app.ui.layout, LayoutMode::Docked);
     restored.load_prefs(r#"{"preferences":{"layout":"invalid","default_units":"in"}}"#);
-    assert_eq!(restored.ui.layout, LayoutMode::Floating);
+    assert_eq!(restored.ui.layout, LayoutMode::Docked);
     assert_eq!(restored.preferences.default_units, "in");
-    assert_eq!(crate::prefs::lenient(&json!({})).layout, LayoutMode::Floating);
+    assert_eq!(crate::prefs::lenient(&json!({})).layout, LayoutMode::Docked);
 }
 
 #[test]
@@ -637,6 +657,12 @@ fn compact_chrome_is_flush_and_browser_hugs_content_in_both_themes() {
         h.call("ui.resize", json!({"width":1400,"height":900}));
         h.call("ui.prefs", json!({"layout":"compact"}));
         h.call("ui.set", json!({"dark":dark}));
+        h.settle();
+        // Nuclear's continuous sidebar runs from the ribbon to the History...
+        let full = rect_of("browser:card").unwrap();
+        assert!(full.height() > h.app.viewport.rect.unwrap().height() * 0.9, "the full-height browser: {full:?}");
+        // ...and, switched off, the browser hugs its tree as before.
+        h.app.preferences.browser_full_height = false;
         h.settle();
         let bar = rect_of("toolbar").unwrap();
         let browser = rect_of("browser:card").unwrap();

@@ -79,12 +79,14 @@ fn browser_body_clicks_respect_the_active_dialog_input() {
 #[test]
 fn browser_card_shrinks_and_scrolls_without_covering_history() {
     let mut h = Harness::new();
+    // The floating cards (the layout before Nuclear's docked default).
+    h.call("ui.set", json!({"layout":"floating"}));
     h.call("ui.resize", json!({"width":1400,"height":900}));
     h.settle();
     let short = rect_of("browser:card").unwrap();
     let history = rect_of("history:card").unwrap();
     assert_eq!(short.left(), SHELL_GAP);
-    assert_eq!(short.width(), 250.0);
+    assert_eq!(short.width(), crate::prefs::DEFAULT_BROWSER_WIDTH);
     assert_eq!(short.top(), rect_of("ribbon:card").unwrap().bottom() + SHELL_GAP);
     assert!(short.bottom() < history.top() - SHELL_GAP);
     assert!(drawn_rows().iter().all(|(_, rect, _, _)| rect.height() == 26.0));
@@ -244,6 +246,8 @@ fn a_second_click_on_a_document_settings_entry_closes_its_window() {
 #[test]
 fn browser_header_folds_the_floating_card_to_its_header_and_back() {
     let mut h = Harness::new();
+    // The floating cards (the layout before Nuclear's docked default).
+    h.call("ui.set", json!({"layout":"floating"}));
     h.call("ui.resize", json!({"width":1400,"height":900}));
     h.settle();
     let open = rect_of("browser:card").unwrap();
@@ -396,6 +400,7 @@ fn collapsed_rail_shares_header_hover_inset_and_expands_from_its_whole_card() {
             let ctx = crate::fonts::test_context();
             ctx.global_style_mut(|style| style.animation_time = 0.0);
             let mut app = SolveApp::new(Default::default(), Default::default());
+            app.ui.layout = LayoutMode::Floating;
             app.ui.tab = "SURFACE".into();
             app.preferences.timeline_left = true;
             app.preferences.timeline_left_browser_collapsed = collapsed;

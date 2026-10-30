@@ -223,6 +223,15 @@ pub(super) fn interface(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
                             }
                         });
                     });
+                    // Nuclear's continuous sidebar, or the tree-hugging card from before.
+                    ui_kit::row(ui, "", |ui| {
+                        let check = setting::browser_full_height(app, ui);
+                        crate::scenario::publish_target("prefs:browser_full_height", check.rect);
+                    });
+                    ui_kit::row(ui, "", |ui| {
+                        let check = setting::quiet_grid(app, ui);
+                        crate::scenario::publish_target("prefs:quiet_grid", check.rect);
+                    });
                     // Where command dialogs open (#6707).
                     ui_kit::row(ui, app.tr("prefs.dialogs"), |ui| {
                         use crate::dialog_column::DialogPlace;
@@ -436,5 +445,11 @@ pub(crate) fn restore_appearance(app: &mut SolveApp) {
     app.preferences.logo_accent = d.logo_accent;
     app.preferences.toolbar_density = d.toolbar_density;
     app.preferences.ribbon_labels = d.ribbon_labels;
+    // The Nuclear HUD's shape: docked panels and the full-height browser at its default width.
+    app.preferences.layout = d.layout;
+    app.ui.layout = d.layout;
+    app.preferences.browser_full_height = d.browser_full_height;
+    app.preferences.browser_width = d.browser_width;
+    app.preferences.quiet_grid = d.quiet_grid;
     app.styled = false;
 }

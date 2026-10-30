@@ -1900,6 +1900,8 @@ mod tests {
     #[test]
     fn history_width_toggle_and_browser_rail_persist_independently() {
         let mut h = Harness::new();
+        // The floating cards (the layout before Nuclear's docked default).
+        h.call("ui.set", json!({"layout":"floating"}));
         h.app.preferences.timeline_left = true;
         h.settle();
         h.step(&json!({"click":{"handle":"history:names"}})).unwrap();
