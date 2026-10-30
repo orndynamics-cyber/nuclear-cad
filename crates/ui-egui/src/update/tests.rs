@@ -508,13 +508,7 @@ fn releases_under_either_owner_are_accepted() {
         assert_eq!(r.assets.len(), 1, "{owner}");
     }
     // Any other owner, repository, host or scheme is dropped.
-    for owner in [
-        "evil/nuclear-cad",
-        "orndynamics-cyber/nuclear-cad-evil",
-        "orndynamics-cyber.evil/nuclear-cad",
-        "tangency-labs/solidcraft",
-        "bherbruck/solidcraft",
-    ] {
+    for owner in ["evil/nuclear-cad", "orndynamics-cyber/nuclear-cad-evil", "orndynamics-cyber.evil/nuclear-cad", "tangency-labs/solidcraft", "bherbruck/solidcraft"] {
         let r = parse(owner);
         assert_eq!(r.page, RELEASES_PAGE, "{owner}");
         assert!(r.assets.is_empty(), "{owner}");

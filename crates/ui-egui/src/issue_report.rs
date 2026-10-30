@@ -1264,7 +1264,8 @@ mod tests {
 
     #[test]
     fn crash_draft_marks_later_detection_without_losing_native_evidence() {
-        let message = "Nuclear 0.3.2 (started 2026-10-01T10:00:00Z) crashed with ACCESS_VIOLATION (0xc0000005) in driver.dll+0x1234 between commands";
+        let message =
+            "Nuclear 0.3.2 (started 2026-10-01T10:00:00Z) crashed with ACCESS_VIOLATION (0xc0000005) in driver.dll+0x1234 between commands";
         let frame = "0xc0000005 ACCESS_VIOLATION at driver.dll+0x1234";
         let report = json!({
             "kind": "unclean_exit", "count": 2, "first_seen": "2026-10-12T16:23:41Z",
