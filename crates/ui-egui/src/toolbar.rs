@@ -86,7 +86,7 @@ impl Plan {
 
 /// A panel's width with these individual button widths.
 pub fn panel_width(buttons: &[f32]) -> f32 {
-    (buttons.iter().sum::<f32>() + buttons.len().saturating_sub(1) as f32 * BUTTON_GAP + 8.0).max(COLLAPSED_WIDTH)
+    (buttons.iter().sum::<f32>() + buttons.len().saturating_sub(1) as f32 * BUTTON_GAP + metrics().panel_padding).max(COLLAPSED_WIDTH)
 }
 
 /// A collapsed panel's width: one button's panel.
@@ -94,7 +94,8 @@ pub const COLLAPSED_WIDTH: f32 = 72.0;
 
 /// The gap after each panel (its separator).
 const PANEL_GAP: f32 = 1.0;
-pub const TAB_ROW_HEIGHT: f32 = 30.0;
+/// The workspace tabs' row: roomy, like the document tabs above it (Nuclear's HUD).
+pub const TAB_ROW_HEIGHT: f32 = 36.0;
 /// Distance from the ribbon card's edges to the first tab and the search field.
 const RIBBON_TAB_INSET: f32 = 4.0;
 /// The labelled ribbon's group height at the default (comfortable) density.
@@ -163,11 +164,46 @@ struct Metrics {
     /// Command artwork, and where a label starts below the button's top edge.
     icon: f32,
     label_top: f32,
+    /// The command labels' text size (never below the theme's body text).
+    label: f32,
+    /// The narrowest and widest a labelled button gets, its label's side padding, and the room
+    /// a panel keeps round its buttons (inside its separators).
+    min_width: f32,
+    max_width: f32,
+    label_padding: f32,
+    panel_padding: f32,
 }
 
-const COMFORTABLE: Metrics =
-    Metrics { button: 66.0, group: 92.0, icon_button: 46.0, icon_group: 72.0, icon_width: 46.0, icon: 30.0, label_top: 38.0 };
-const COMPACT: Metrics = Metrics { button: 60.0, group: 86.0, icon_button: 36.0, icon_group: 62.0, icon_width: 40.0, icon: 26.0, label_top: 32.0 };
+/// The Nuclear ribbon (#nuclear-hud): 34 point artwork on 74 point buttons, 64 to 88 wide, with
+/// 13.5 point labels and roomy groups, so the commands use the toolbar's width.
+const COMFORTABLE: Metrics = Metrics {
+    button: 74.0,
+    group: 100.0,
+    icon_button: 52.0,
+    icon_group: 78.0,
+    icon_width: 52.0,
+    icon: 34.0,
+    label_top: 44.0,
+    label: 13.5,
+    min_width: 64.0,
+    max_width: 88.0,
+    label_padding: 14.0,
+    panel_padding: 8.0,
+};
+const COMPACT: Metrics = Metrics {
+    button: 60.0,
+    group: 86.0,
+    icon_button: 36.0,
+    icon_group: 62.0,
+    icon_width: 40.0,
+    icon: 26.0,
+    label_top: 32.0,
+    label: 0.0,
+    min_width: 54.0,
+    max_width: 76.0,
+    label_padding: 10.0,
+    panel_padding: 8.0,
+};
 
 thread_local! {
     /// The density drawn now, per UI thread like the theme (set each frame from preferences).
@@ -186,15 +222,24 @@ fn metrics() -> Metrics {
     DENSITY.get().metrics()
 }
 
+/// The command labels' text size at the density drawn now.
+fn label_size() -> f32 {
+    crate::theme::Tokens::get().font_body.max(metrics().label)
+}
+
 /// The same height drives shell reservations and ribbon painting in either layout.
 pub(crate) fn ribbon_height(labels: bool) -> f32 {
     let m = metrics();
     TAB_ROW_HEIGHT + if labels { m.group } else { m.icon_group } + 1.0
 }
 const BUTTON_GAP: f32 = 3.0;
-const BUTTON_MIN_WIDTH: f32 = 54.0;
-const BUTTON_MAX_WIDTH: f32 = 76.0;
-const BUTTON_LABEL_PADDING: f32 = 10.0;
+/// The default (comfortable) density's button limits, which the tests size their panels with.
+#[cfg(test)]
+const BUTTON_MIN_WIDTH: f32 = COMFORTABLE.min_width;
+#[cfg(test)]
+const BUTTON_MAX_WIDTH: f32 = COMFORTABLE.max_width;
+#[cfg(test)]
+const BUTTON_LABEL_PADDING: f32 = COMFORTABLE.label_padding;
 /// Room kept below a button's label, inside its highlight.
 const BUTTON_LABEL_BOTTOM: f32 = 2.0;
 const SECTION_HEIGHT: f32 = 20.0;
@@ -249,7 +294,8 @@ fn shrink(panels: &[PanelSize], room: f32) -> Option<Vec<Plan>> {
     }
     // 1. Narrow together in one-pixel steps, keeping each button's measured width until it
     // reaches its minimum. The gallery's minimum equals its full width.
-    for reduction in 1..=((BUTTON_MAX_WIDTH - BUTTON_MIN_WIDTH) as usize) {
+    let m = metrics();
+    for reduction in 1..=((m.max_width - m.min_width) as usize) {
         for (plan, panel) in plans.iter_mut().zip(panels) {
             for (width, button) in plan.widths.iter_mut().zip(&panel.buttons) {
                 *width = (button.width - reduction as f32).max(button.min_width);
@@ -970,18 +1016,29 @@ fn ribbon_button_lines(painter: &egui::Painter, label: &str, width: f32) -> Vec<
 }
 
 fn ribbon_label_width(painter: &egui::Painter, text: &str) -> f32 {
-    let mut job =
-        egui::text::LayoutJob::simple(text.to_owned(), FontId::proportional(crate::theme::Tokens::get().font_body), Color32::WHITE, f32::INFINITY);
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), FontId::proportional(label_size()), Color32::WHITE, f32::INFINITY);
     job.halign = egui::Align::Center;
     painter.layout_job(job).size().x
 }
 
 fn ribbon_button_width(painter: &egui::Painter, label: &str) -> f32 {
-    let widest = ribbon_label_lines(painter, label, BUTTON_MAX_WIDTH - BUTTON_LABEL_PADDING)
+    let m = metrics();
+    let widest = ribbon_label_lines(painter, label, m.max_width - m.label_padding)
         .iter()
         .map(|line| ribbon_label_width(painter, line))
         .fold(0.0_f32, f32::max);
-    (widest + BUTTON_LABEL_PADDING).clamp(BUTTON_MIN_WIDTH, BUTTON_MAX_WIDTH)
+    (widest + m.label_padding).clamp(m.min_width, m.max_width)
+}
+
+/// The narrowest a labelled button may get while the ribbon narrows: its longest word stays
+/// whole, so a crowded ribbon moves buttons into the drop-downs before it cuts a label.
+fn ribbon_button_min_width(painter: &egui::Painter, label: &str) -> f32 {
+    let m = metrics();
+    if label.chars().any(|c| cjk_script(c) != CjkScript::Other) {
+        return m.min_width;
+    }
+    let widest = label.split_whitespace().map(|word| ribbon_label_width(painter, word)).fold(0.0_f32, f32::max);
+    (widest + m.label_padding).clamp(m.min_width, m.max_width)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1078,7 +1135,7 @@ fn ribbon_label_lines(painter: &egui::Painter, label: &str, width: f32) -> Vec<S
 fn ribbon_button_galley(painter: &egui::Painter, label: &str, width: f32, color: Color32) -> std::sync::Arc<egui::Galley> {
     let lines = ribbon_button_lines(painter, label, width);
     // Explicit newlines only: egui must never split an oversized word.
-    let size = crate::theme::Tokens::get().font_body;
+    let size = label_size();
     let mut job = egui::text::LayoutJob::simple(lines.join("\n"), FontId::proportional(size), color, f32::INFINITY);
     job.halign = egui::Align::Center;
     // Two lines sit closer than the font's own spacing, so they fit in the button under its
@@ -1151,15 +1208,17 @@ fn ribbon_tab_style(t: &Tokens, tab: &str, contextual: bool, active: bool, hover
     RibbonTabStyle { fill, ink, outline }
 }
 
+/// The workspace tabs' text size: the heading size, a step above the commands' labels.
+fn workspace_tab_font(t: &Tokens) -> f32 {
+    t.font_heading
+}
+
 fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
     let t = Tokens::get();
     let tabs = crate::workspace::visible_tabs(app);
     let widths: Vec<_> = tabs
         .iter()
-        .map(|tab| {
-            ui.painter().layout_no_wrap(ribbon_label(app, tab), crate::fonts::semibold(crate::theme::Tokens::get().font_button), t.text).size().x
-                + 24.0
-        })
+        .map(|tab| ui.painter().layout_no_wrap(ribbon_label(app, tab), crate::fonts::semibold(workspace_tab_font(&t)), t.text).size().x + 32.0)
         .collect();
     let tabs_width: f32 = widths.iter().sum::<f32>()
         + tabs.len().saturating_sub(1) as f32 * 2.0
@@ -1231,7 +1290,14 @@ fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
                     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, ribbon_label(app, tab)));
                     let style = ribbon_tab_style(&t, tab, contextual, active, response.hovered());
                     ui.painter().rect(tr, corner, style.fill, Stroke::new(1.0, style.outline), egui::StrokeKind::Inside);
-                    ribbon_text(ui, tr.center(), &ribbon_label(app, tab), t.font_button, style.ink, active || contextual);
+                    ribbon_text(ui, tr.center(), &ribbon_label(app, tab), workspace_tab_font(&t), style.ink, active || contextual);
+                    // The active workspace: an accent line along the tab's foot, as on the
+                    // active document tab.
+                    if active {
+                        let accent = crate::theme::TabAccent::for_tab(&t, tab).color;
+                        let line = Rect::from_min_max(pos2(tr.left() + 8.0, tr.bottom() - 2.5), pos2(tr.right() - 8.0, tr.bottom()));
+                        ui.painter().rect_filled(line, 1, accent);
+                    }
                     if ui.clip_rect().contains(tr.center()) {
                         crate::scenario::publish_target(&format!("tab:{tab}"), tr);
                         crate::scenario::publish_rect(&format!("toolbar_tab:{tab}"), tr);
@@ -1458,7 +1524,9 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                             .filter(|f| tab == "SKETCH" && *panel == "CREATE" && f.commands.first().copied() == Some(c.id));
                         let label = family.map_or_else(|| crate::workspace::ribbon_button_label(c), |f| f.label);
                         if labels {
-                            ButtonSize { width: ribbon_button_width(&painter, app.tr_label(label)), min_width: BUTTON_MIN_WIDTH }
+                            let text = app.tr_label(label);
+                            let width = ribbon_button_width(&painter, text);
+                            ButtonSize { width, min_width: ribbon_button_min_width(&painter, text).min(width) }
                         } else {
                             let width = if family.is_some() { m.icon_width + 10.0 } else { m.icon_width };
                             ButtonSize { width, min_width: width }
@@ -1657,7 +1725,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     let button_label = crate::workspace::ribbon_button_label(selected);
                     let label = app.tr_label(if button_label == selected.label { info.label } else { button_label });
                     let color = if info.enabled { t.text } else { t.text_dim };
-                    let galley = ribbon_button_galley(&painter, label, whole.width() - BUTTON_LABEL_PADDING, color);
+                    let galley = ribbon_button_galley(&painter, label, whole.width() - m.label_padding, color);
                     painter.galley(pos2(whole.center().x, ribbon_label_top(whole, galley.size().y)), galley, t.text);
                 }
             }
@@ -2960,15 +3028,15 @@ mod header_report_tests {
     fn variable_width_buttons_narrow_before_rightmost_equal_panels_lose_buttons() {
         let panels = vec![PanelSize {
             buttons: vec![
-                ButtonSize { width: 76.0, min_width: BUTTON_MIN_WIDTH },
-                ButtonSize { width: 63.0, min_width: BUTTON_MIN_WIDTH },
-                ButtonSize { width: 54.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH + 22.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH + 9.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH, min_width: BUTTON_MIN_WIDTH },
             ],
         }];
         let full = used(&panels.iter().map(Plan::full).collect::<Vec<_>>());
         let narrow = fit(&panels, full - 1.0);
         assert_eq!(narrow[0].shown, 3);
-        assert_eq!(narrow[0].widths, [75.0, 62.0, 54.0]);
+        assert_eq!(narrow[0].widths, [BUTTON_MIN_WIDTH + 21.0, BUTTON_MIN_WIDTH + 8.0, BUTTON_MIN_WIDTH]);
         let minimum = panel_width(&[BUTTON_MIN_WIDTH; 3]) + PANEL_GAP;
         let narrow = fit(&panels, minimum);
         assert_eq!(narrow[0].shown, 3);
@@ -4031,7 +4099,9 @@ mod fill_width_tests {
                 } else if sketch {
                     CONSTRAINT_GRID_WIDTH + BUTTON_GAP
                 } else {
-                    BUTTON_MIN_WIDTH + BUTTON_GAP
+                    // A hidden button keeps its longest word whole, so it may need up to the
+                    // widest button's room.
+                    BUTTON_MAX_WIDTH + BUTTON_GAP
                 };
                 if hidden {
                     assert!(gap < button, "{at}: {gap} px left blank while buttons are hidden");

@@ -712,14 +712,16 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
     let (first, shown, w) = layout(n, app.docs.active, x1 - x0);
     let mut pick: Option<usize> = None;
     let mut shut: Option<usize> = None;
-    // Each tab fits its name (up to MAX_FIT) while all of them fit; otherwise they share the room.
-    const MAX_FIT: f32 = 240.0;
+    // Each tab fits its name, at least PREFERRED and up to MAX_FIT, while all of them fit;
+    // otherwise they share the room (Nuclear's roomier document tabs).
+    const PREFERRED: f32 = 176.0;
+    const MAX_FIT: f32 = 220.0;
     let names = display_names(app, &info, &paths);
     let natural: Vec<f32> = names
         .iter()
         .map(|name| {
             let text = ui.painter().layout_no_wrap(name.clone(), crate::fonts::semibold(t.font_heading), t.app_bar_text).size().x;
-            (text + 52.0).clamp(MIN_TAB, MAX_FIT)
+            (text + 60.0).clamp(PREFERRED, MAX_FIT)
         })
         .collect();
     let list_room = if n > 1 { LIST_BUTTON } else { 0.0 };
@@ -766,7 +768,8 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
             Some((from, left)) if from == i => left,
             _ => i.checked_sub(first).and_then(|k| lefts.get(k)).copied().unwrap_or(x0),
         };
-        let tr = Rect::from_min_size(pos2(left, r.top() + 3.0), vec2(w - 2.0, r.height() - 6.0));
+        // 42 points high in the 44 point bar: the tab rises from the bar's foot.
+        let tr = Rect::from_min_size(pos2(left, r.top() + 2.0), vec2(w - 2.0, r.height() - 2.0));
         let active = !app.home.open && (i == app.docs.active || app.docs.slots.is_empty());
         let resp = ui.interact(tr, ui.id().with(("doc_tab", i)), Sense::click_and_drag());
         crate::scenario::publish_target(&format!("tab:design:{i}"), tr);
@@ -798,22 +801,22 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         let ink = if active || lit { t.app_bar_text } else { t.app_bar_text.gamma_multiply(0.7) };
         let font = if active { crate::fonts::semibold(t.font_heading) } else { FontId::proportional(t.font_heading) };
         let g = ui.painter().layout_no_wrap(name_display.clone(), font, ink);
-        let text_w = (tr.width() - 42.0).max(10.0);
+        let text_w = (tr.width() - 50.0).max(10.0);
         let tip = tab_tooltip(&name_display, paths.get(i).cloned().flatten().as_deref(), g.size().x > text_w);
         let tip = if *dirty { format!("{tip}\n{}", app.tr("ui.unsaved_changes")) } else { tip };
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, &name_display));
         let clip = Rect::from_min_size(tr.min, vec2(text_w + 12.0, tr.height()));
-        ui.painter().with_clip_rect(clip).galley(pos2(tr.left() + 12.0, tr.center().y - g.size().y / 2.0), g, ink);
+        ui.painter().with_clip_rect(clip).galley(pos2(tr.left() + 16.0, tr.center().y - g.size().y / 2.0), g, ink);
         // The active design: an accent line along the tab's foot, with the lifted surface.
         if active {
             let line = Rect::from_min_max(pos2(tr.left() + 6.0, tr.bottom() - 2.5), pos2(tr.right() - 6.0, tr.bottom()));
             ui.painter().rect_filled(line, 1, t.accent);
         }
         // × (a 24 point target); unsaved changes show a filled dot in its place until hovered.
-        let xr = Rect::from_center_size(pos2(tr.right() - 16.0, tr.center().y), vec2(24.0, 24.0));
+        let xr = Rect::from_center_size(pos2(tr.right() - 18.0, tr.center().y), vec2(26.0, 26.0));
         let show_close = resp.hovered() || ui.rect_contains_pointer(tr) || (active && !*dirty);
         if *dirty && !show_close {
-            ui.painter().circle_filled(xr.center(), 4.0, ink);
+            ui.painter().circle_filled(xr.center(), 4.5, t.accent);
         }
         let xresp = ui.interact(xr, ui.id().with(("doc_close", i)), if show_close { Sense::click() } else { Sense::hover() });
         crate::scenario::publish_target(&format!("tab:close:{i}"), xr);
@@ -1028,7 +1031,9 @@ fn tab_shape(painter: &egui::Painter, t: &Tokens, r: Rect, active: bool, hovered
     } else {
         egui::Color32::TRANSPARENT
     };
-    painter.rect_filled(r, t.radius_md, fill);
+    // Rounded at the top only: the tab rises from the bar's foot like a page's tab.
+    let radius = t.radius_md;
+    painter.rect_filled(r, egui::CornerRadius { nw: radius, ne: radius, sw: 0, se: 0 }, fill);
 }
 
 /// Tabs never get narrower than this: past it the strip scrolls to keep the active one and the

@@ -120,14 +120,14 @@ pub const SECTIONS: &[Section] = &[
     Section {
         tab: "MODEL",
         panel: "ARRANGE",
-        promoted: 3,
+        promoted: 4,
         ids: &["solid.move", "solid.mirror", "solid.pattern.rectangular", "solid.align", "solid.pattern.circular", "solid.pattern.path"],
     },
     Section { tab: "MODEL", panel: "CONFIGURE", promoted: 2, ids: CONFIGURE },
     Section { tab: "MODEL", panel: "CONSTRUCT", promoted: 1, ids: &["construct.plane.offset"] },
     // Inspect sits inside the modelling tabs too, at the end of their regular panels (the INSPECT
     // tab keeps the full set): the same commands and measurement state, not copies.
-    Section { tab: "MODEL", panel: "INSPECT", promoted: 2, ids: MODEL_INSPECT },
+    Section { tab: "MODEL", panel: "INSPECT", promoted: 3, ids: MODEL_INSPECT },
     // Only while a linked design is edited in place, pinned at the right as FINISH SKETCH is.
     Section { tab: "MODEL", panel: "FINISH EDITING", promoted: 1, ids: &["component.finish_edit"] },
     // Sketches drive surfaces too: New Sketch leads the tab, as on MODEL and SHEET METAL.
@@ -135,7 +135,7 @@ pub const SECTIONS: &[Section] = &[
     Section { tab: "SURFACE", panel: "CREATE", promoted: 4, ids: &["surface.extrude", "surface.revolve", "surface.sweep", "surface.loft"] },
     Section { tab: "SURFACE", panel: "EDIT", promoted: 4, ids: &["surface.trim", "surface.untrim", "surface.extend", "surface.stitch"] },
     Section { tab: "SURFACE", panel: "CONVERT", promoted: 2, ids: &["surface.thicken", "mesh.convert"] },
-    Section { tab: "SURFACE", panel: "INSPECT", promoted: 2, ids: SURFACE_INSPECT },
+    Section { tab: "SURFACE", panel: "INSPECT", promoted: 4, ids: SURFACE_INSPECT },
     Section {
         tab: "ASSEMBLE",
         panel: "COMPONENTS",
@@ -826,7 +826,7 @@ mod tests {
             ("SKETCH", vec!["sketch.create"]),
             ("CREATE", vec!["solid.extrude", "solid.revolve", "solid.hole"]),
             ("MODIFY", vec!["solid.fillet", "solid.chamfer", "solid.shell", "solid.press_pull"]),
-            ("ARRANGE", vec!["solid.move", "solid.mirror", "solid.pattern.rectangular"]),
+            ("ARRANGE", vec!["solid.move", "solid.mirror", "solid.pattern.rectangular", "solid.align"]),
             ("CONSTRUCT", vec!["construct.plane.offset"]),
         ] {
             let (cmds, n) = layout("MODEL", panel, &specs).unwrap();

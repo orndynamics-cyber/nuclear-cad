@@ -881,14 +881,14 @@ mod tests {
         h.app.home.open = false;
         h.frames(3);
         let closed = crate::scenario::rect_of("ribbon:search").unwrap();
-        // Parent bba2183a: 30 pt tab row, 4 pt inset on every side.
+        // Nuclear's HUD: 36 pt tab row, 4 pt inset on every side.
         let toolbar = crate::scenario::rect_of("toolbar").unwrap();
-        assert_eq!(crate::toolbar::TAB_ROW_HEIGHT, 30.0);
-        assert_eq!(crate::toolbar::RIBBON_HEIGHT, 123.0);
-        assert_eq!(closed.size(), vec2(ui_kit::CommandSearch::closed_width(&h.ctx), 22.0));
+        assert_eq!(crate::toolbar::TAB_ROW_HEIGHT, 36.0);
+        assert_eq!(crate::toolbar::RIBBON_HEIGHT, 137.0);
+        assert_eq!(closed.size(), vec2(ui_kit::CommandSearch::closed_width(&h.ctx), 28.0));
         assert_eq!(closed.right(), toolbar.right() - 4.0);
         assert_eq!(closed.top(), toolbar.top() + 4.0);
-        assert_eq!(closed.center().y, toolbar.top() + 15.0);
+        assert_eq!(closed.center().y, toolbar.top() + 18.0);
         h.call("ui.palette", json!({}));
         h.frame();
         let middle = crate::scenario::rect_of("ribbon:search").unwrap();

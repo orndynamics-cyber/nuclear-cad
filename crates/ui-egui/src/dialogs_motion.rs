@@ -986,7 +986,8 @@ mod tests {
     #[test]
     fn configuration_rule_editor_creates_previews_edits_and_applies_driven_value() {
         let mut h = crate::scenario::Harness::new();
-        h.call("ui.resize", json!({"width":1400,"height":1000}));
+        // As much room under Nuclear's taller ribbon as the form had before it.
+        h.call("ui.resize", json!({"width":1400,"height":1014}));
         configuration_steps(
             &mut h,
             &json!([

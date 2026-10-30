@@ -1713,15 +1713,19 @@ fn build_sketch_scene(app: &SolveApp, proj: &Proj) -> GpuScene {
         let fade = GridFade::new(app.cam.half_height(), slant, ext, far_reach);
         let n = ((fade.end / minor) as i64).clamp(1, 300);
         let (grid, grid_major) = (c4(tk.grid), c4(tk.grid_major));
+        // Nuclear's quieter grid: outside a sketch the minor lines are faint, so the grid frames
+        // the part instead of covering the view; drawing a sketch shows them at full strength.
+        let minor_alpha = if s.active_sketch.is_none() && app.preferences.quiet_grid { QUIET_MINOR_GRID } else { 1.0 };
         for i in -n..=n {
             let t = i as f64 * minor;
             let maj = (t / major).round() * major == t;
             let col = if maj { grid_major } else { grid };
             let wd = if maj { 1.0 } else { 0.7 };
+            let strength = if maj { 1.0 } else { minor_alpha };
             // Two lines through the point `c + u * t`: one along v, one along u.
             for (along, across) in [(v, u), (u, v)] {
                 for (s0, s1, alpha) in fade.pieces(t) {
-                    let col = sc.color(grid_colour(col, alpha));
+                    let col = sc.color(grid_colour(col, alpha * strength));
                     sc.under_line(w3(c + across * t + along * s0), w3(c + across * t + along * s1), col, wd);
                 }
             }
@@ -5586,6 +5590,9 @@ fn points_2d(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
         painter.circle(p, 4.5, t.hover_edge_halo, Stroke::new(1.5, t.hover_edge));
     }
 }
+
+/// How strong the minor grid lines are outside a sketch (Nuclear's quieter default grid).
+const QUIET_MINOR_GRID: f32 = 0.45;
 
 /// A grid line's colour, as faint as the fade makes it.
 fn grid_colour(c: [u8; 4], alpha: f32) -> [u8; 4] {
@@ -9893,7 +9900,8 @@ mod tests {
                 let history = h.app.shell.history.expect("the floating history card");
                 (browser.right(), browser.center().y, history.top())
             } else {
-                (vp.left(), vp.center().y, vp.bottom())
+                // Nuclear's docked browser runs the full height of the view's left side.
+                (h.app.shell.browser.map_or(vp.left(), |b| b.right().max(vp.left())), vp.center().y, vp.bottom())
             };
             let x = vp.center().x;
             for p in [
@@ -10920,6 +10928,8 @@ mod grid_plane_tests {
         let mut app = SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
         app.ui.show_grid = true;
         app.ui.perspective = true;
+        // The fade alone: every line at its full strength in the middle of the view.
+        app.preferences.quiet_grid = false;
         // A low view of the ground: the far ground is in the picture, where the grid used to end
         // in a cut.
         app.cam.pitch = 0.25;
