@@ -3163,3 +3163,115 @@ fn transform_refuses_a_matrix_that_is_not_an_affine_placement() {
     let removed = measure(&lifted).unwrap().volume - measure(&cut).unwrap().volume;
     assert!((removed - 6.0 * 6.0 * 3.0).abs() < 1.0, "{removed}");
 }
+
+/// A vase revolved from a spline: a flat bottom, one cubic wall bulging out and coming in to a
+/// narrower mouth, a flat top cap. Shelled from the cap it used to be refused at the offset step
+/// ("only bodies with planes, cylinders, cones, spheres and tori"): the wall is neither. The
+/// walls are the meridian offset along its own normal and revolved, so the material's volume is
+/// the Pappus volume of the meridian band (worked out independently, on a fine polyline, with
+/// sharp corners: `reference_cubic.py` in the investigation notes).
+fn spline_vase() -> (Seg2, Body) {
+    let wall = Seg2::Cubic { p0: Vec2::new(20.0, 0.0), p1: Vec2::new(32.0, 15.0), p2: Vec2::new(32.0, 45.0), p3: Vec2::new(18.0, 70.0) };
+    let segs = vec![
+        Seg2::Line { a: Vec2::new(0.0, 0.0), b: Vec2::new(20.0, 0.0) },
+        wall,
+        Seg2::Line { a: Vec2::new(18.0, 70.0), b: Vec2::new(0.0, 70.0) },
+        Seg2::Line { a: Vec2::new(0.0, 70.0), b: Vec2::new(0.0, 0.0) },
+    ];
+    let r = Region2 { outer: Loop2 { segs }, holes: vec![] };
+    (wall, revolve_whole(&Plane::YZ, &[r], Vec2::ZERO, Vec2::new(0.0, 1.0), 2.0 * PI).unwrap().pop().unwrap())
+}
+
+#[test]
+fn shell_of_a_vase_revolved_from_a_spline() {
+    let (wall, vase) = spline_vase();
+    assert!(vase.validity().is_empty(), "{:?}", vase.validity());
+    let outer = measure(&vase).unwrap();
+    let top = [Vec3::new(3.0, 3.0, 70.0)];
+    for (t, want) in [(0.5, 6442.26), (1.0, 12714.60), (2.0, 24755.43), (3.0, 36134.17)] {
+        let s = shell(&vase, &top, t).unwrap_or_else(|e| panic!("t {t}: {e}"));
+        assert!(s.validity().is_empty(), "t {t}: {:?}", s.validity());
+        let m = measure(&s).unwrap();
+        assert!(rel(m.volume, want) < 5e-4, "t {t}: {} vs {want}", m.volume);
+        // The outside is the vase's.
+        assert!(m.bbox.min.dist(outer.bbox.min) < 1e-3 && m.bbox.max.dist(outer.bbox.max) < 1e-3, "t {t}: {:?}", m.bbox);
+        // Across the wall along its normal, at a few heights, and through the bottom: material
+        // for the thickness, then the cavity.
+        for k in [0.2, 0.5, 0.8] {
+            let p = wall.point_at(k);
+            let n = wall.derivative(k).normalized().unwrap().perp();
+            let at = |d: f64| Vec3::new(0.0, p.x + n.x * d, p.y + n.y * d);
+            assert!(s.contains(at(t * 0.5)), "t {t}: no wall at {k}");
+            assert!(!s.contains(at(t * 1.5)), "t {t}: the wall is thicker than {t} at {k}");
+        }
+        assert!(s.contains(Vec3::new(5.0, 0.0, t * 0.5)) && !s.contains(Vec3::new(5.0, 0.0, t * 1.5)), "t {t}: bottom");
+        // Inner walls line the walls they were offset from.
+        let h = s.history().expect("a shell keeps its history");
+        assert!(h.faces.iter().any(|f| f.origins.iter().any(|o| matches!(o, history::FaceOrigin::Offset { .. }))), "t {t}");
+    }
+    // Walls thicker than the mouth leaves room for: refused, with the reason.
+    let e = shell(&vase, &top, 25.0).unwrap_err();
+    assert!(matches!(e, KernelError::Invalid(_)) && e.to_string().contains("too thick"), "{e}");
+    // The same vase turned about a slanted axis and moved: the same shell.
+    let moved = transform(&vase, Vec3::new(50.0, 20.0, 10.0), Vec3::ZERO, Vec3::new(1.0, 1.0, 0.0), 0.5).unwrap();
+    let k = Vec3::new(1.0, 1.0, 0.0).normalized().unwrap();
+    let pick = build::rotate_about(top[0], Vec3::ZERO, k, 0.5) + Vec3::new(50.0, 20.0, 10.0);
+    let s = shell(&moved, &[pick], 2.0).unwrap();
+    assert!(s.validity().is_empty(), "{:?}", s.validity());
+    assert!(rel(measure(&s).unwrap().volume, 24755.43) < 5e-4, "{}", measure(&s).unwrap().volume);
+}
+
+/// A vase of two tangent arcs (a belly and a flared neck) shelled from its top: the walls are
+/// tori, which the offset step knew, but the boolean of the two revolved sheets took minutes
+/// for thin walls. Its volume is Fusion's for the same vase and thickness (sharp offset).
+#[test]
+fn shell_of_a_vase_of_tangent_arcs() {
+    let (c1, r1) = (Vec2::new(5.0, 30.0), 1125f64.sqrt());
+    let u = Vec2::from_angle(60f64.to_radians());
+    let p = c1 + u * r1;
+    let c2 = p + u * 10.0;
+    let top = Vec2::new(c2.x - (100.0 - (70.0 - c2.y).powi(2)).sqrt(), 70.0);
+    let a0 = (Vec2::new(20.0, 0.0) - c1).angle();
+    let (b0, b1) = ((p - c2).angle(), (top - c2).angle());
+    let segs = vec![
+        Seg2::Line { a: Vec2::new(0.0, 0.0), b: Vec2::new(20.0, 0.0) },
+        Seg2::Arc { center: c1, radius: r1, start: a0, sweep: 60f64.to_radians() - a0 },
+        Seg2::Arc { center: c2, radius: 10.0, start: b0, sweep: (b1 - b0 + 2.0 * PI) % (2.0 * PI) - 2.0 * PI },
+        Seg2::Line { a: top, b: Vec2::new(0.0, 70.0) },
+        Seg2::Line { a: Vec2::new(0.0, 70.0), b: Vec2::new(0.0, 0.0) },
+    ];
+    let r = Region2 { outer: Loop2 { segs }, holes: vec![] };
+    let vase = revolve_whole(&Plane::YZ, &[r], Vec2::ZERO, Vec2::new(0.0, 1.0), 2.0 * PI).unwrap().pop().unwrap();
+    assert!(rel(measure(&vase).unwrap().volume, 223316.13) < 5e-4, "{}", measure(&vase).unwrap().volume);
+    for (t, fusion) in [(0.5, 8614.61), (2.0, 33249.21)] {
+        let started = std::time::Instant::now();
+        let s = shell(&vase, &[Vec3::new(3.0, 3.0, 70.0)], t).unwrap();
+        assert!(started.elapsed().as_secs() < 30, "t {t}: {:?}", started.elapsed());
+        assert!(s.validity().is_empty(), "t {t}: {:?}", s.validity());
+        let v = measure(&s).unwrap().volume;
+        assert!(rel(v, fusion) < 5e-4, "t {t}: {v} vs {fusion}");
+    }
+}
+
+/// The spline vase with its foot rounded (a fitted round, not an exact torus) before the shell,
+/// and the vase written to STEP and read back: both still bodies of revolution, shelled the
+/// same way. The rounded foot's volume is worked out like the plain vase's
+/// (`reference_cubic_fillet.py`).
+#[test]
+fn shell_of_a_spline_vase_rounded_or_read_from_step() {
+    let (_, vase) = spline_vase();
+    let top = [Vec3::new(3.0, 3.0, 70.0)];
+    let rounded = fillet(&vase, &[Vec3::new(0.0, 20.0, 0.0)], 3.0).unwrap();
+    // At 3 mm the round (radius 3) collapses and the walls beside it meet sharp.
+    for (t, want) in [(1.0, 12691.59), (2.0, 24718.68), (3.0, 36092.86)] {
+        let s = shell(&rounded, &top, t).unwrap_or_else(|e| panic!("rounded, t {t}: {e}"));
+        assert!(s.validity().is_empty(), "rounded, t {t}: {:?}", s.validity());
+        let v = measure(&s).unwrap().volume;
+        assert!(rel(v, want) < 5e-4, "rounded, t {t}: {v} vs {want}");
+    }
+    let text = step_export(&[&vase], "SolidCraft").unwrap();
+    let read = step_import(&text).unwrap().bodies.pop().unwrap().body;
+    let s = shell(&read, &top, 2.0).unwrap();
+    assert!(s.validity().is_empty(), "{:?}", s.validity());
+    assert!(rel(measure(&s).unwrap().volume, 24755.43) < 5e-4, "{}", measure(&s).unwrap().volume);
+}

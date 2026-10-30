@@ -120,6 +120,7 @@ pub mod provenance;
 mod record;
 mod seam_faces;
 mod sew;
+mod shell_revolved;
 mod smooth_edges;
 mod sphere_lens;
 mod spline_conv;

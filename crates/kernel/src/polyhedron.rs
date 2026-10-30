@@ -490,6 +490,15 @@ fn shell_planar(b: &Body, open: &[Vec3], thickness: f64) -> Result<Body> {
             "the rim would have no thickness: an open face meets a round of radius {r:.4} mm tangentially, and the shell is {thickness:.4} mm thick (make the round smaller than the thickness)"
         )));
     }
+    // A body of revolution is shelled on its meridian: exact walls whatever curve it was
+    // revolved from, and no boolean. A thickness its shape can't take is an answer; anything
+    // else it can't do is left to the general shell below.
+    match crate::shell_revolved::shell(&healed, &opened, thickness) {
+        Ok(Some(shell)) => return Ok(record::after(shell, &healed, &record::counts(&[b]))),
+        Ok(None) => {}
+        Err(e @ KernelError::Invalid(_)) => return Err(e),
+        Err(e) => log::debug!("shell of revolution: {e}; trying the general shell"),
+    }
     if let Some(shell) = shell_barrel(&healed, &opened, thickness)? {
         return Ok(record::after(shell, &healed, &record::counts(&[b])));
     }
