@@ -186,7 +186,17 @@ pub(crate) fn shell(b: &Body, opened: &[usize], thickness: f64) -> Result<Option
     }
     let region = Region2 { outer, holes: vec![] };
     let expect = pappus(&region.outer.segs, tol);
-    let built = crate::build::revolve_whole(&frame.plane(), std::slice::from_ref(&region), Vec2::ZERO, Vec2::new(0.0, 1.0), std::f64::consts::TAU)?;
+    // Pieces of one wall that meet smoothly are swept as one curve: one face, as the wall was.
+    let joins: Vec<Vec2> = loop_segs
+        .windows(2)
+        .filter_map(|w| {
+            let [(a, ra), (b, rb)] = w else { return None };
+            let same = matches!((ra, rb), (Role::Outer(x), Role::Outer(y)) | (Role::Inner(x), Role::Inner(y)) if x == y);
+            let smooth = a.end_tangent().cross(b.start_tangent()).abs() < 1e-5 && a.end_tangent().dot(b.start_tangent()) > 0.0;
+            (same && smooth).then(|| a.end())
+        })
+        .collect();
+    let built = crate::build::revolve_whole_joined(&frame.plane(), &region, Vec2::ZERO, Vec2::new(0.0, 1.0), &joins)?;
     let [body]: [Body; 1] = built.try_into().map_err(|_| unsupported("the material region turned into several bodies"))?;
     let bad = body.validity();
     let got = crate::measure(&body).map(|m| m.volume).unwrap_or(f64::NAN);
@@ -966,11 +976,10 @@ fn fit_few(f: &dyn Fn(f64) -> Option<Vec2>, t0: f64, t1: f64, tol: f64, depth: u
 /// before), the rest least-squares fitted; `None` unless every one of 256 samples lies within
 /// `tol` of `f` at the same parameter (which bounds the distance between the curves both ways).
 fn bezier_fit(f: &dyn Fn(f64) -> Option<Vec2>, t0: f64, t1: f64, n: usize, tol: f64) -> Option<Seg2> {
+    // Central differences, even at the ends: neighbouring pieces then share their tangent where
+    // they meet (to about 1e-10), so they can be swept as one smooth curve.
     let h = (t1 - t0) * 1e-5;
-    let d = |t: f64| -> Option<Vec2> {
-        let (a, b) = ((t - h).max(t0), (t + h).min(t1));
-        Some((f(b)? - f(a)?) * ((t1 - t0) / (b - a)))
-    };
+    let d = |t: f64| -> Option<Vec2> { Some((f(t + h)? - f(t - h)?) * ((t1 - t0) / (2.0 * h))) };
     let at = |s: f64| f(t0 + (t1 - t0) * s);
     let binom = |k: usize| (0..k).fold(1.0, |c, i| c * (n - i) as f64 / (i + 1) as f64);
     let basis = |j: usize, s: f64| binom(j) * s.powi(j as i32) * (1.0 - s).powi((n - j) as i32);
