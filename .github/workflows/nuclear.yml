@@ -169,3 +169,66 @@ jobs:
         with:
           name: nuclear-macos-universal
           path: out/
+
+  # Mac proof without a Mac: install the packaged app the way a user would (from the dmg, with the
+  # quarantine flag a download gets, then removed as the instructions say), launch it with the
+  # sample design and drive it over the control channel: window screenshot, GPU render, quit.
+  macos-smoke:
+    name: macOS launch test (${{ matrix.runner }})
+    needs: macos
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, macos-15]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: nuclear-macos-universal
+          path: pkg
+      - name: Install from the dmg
+        run: |
+          set -euo pipefail
+          DMG="$(ls pkg/*.dmg)"
+          xattr -w com.apple.quarantine "0081;$(printf %x "$(date +%s)");Safari;" "$DMG"
+          MNT="$(mktemp -d)"
+          hdiutil attach -readonly -nobrowse -mountpoint "$MNT" "$DMG"
+          mkdir -p "$HOME/Applications"
+          cp -R "$MNT/Nuclear.app" "$HOME/Applications/"
+          hdiutil detach "$MNT"
+          xattr -dr com.apple.quarantine "$HOME/Applications/Nuclear.app"
+          codesign --verify --deep --strict --verbose=2 "$HOME/Applications/Nuclear.app"
+          sw_vers; uname -m
+          system_profiler SPDisplaysDataType || true
+      - name: Launch and drive the app
+        run: python3 packaging/macos/smoke-test.py "$HOME/Applications/Nuclear.app" smoke
+      - name: Desktop screenshot
+        if: always()
+        run: |
+          mkdir -p smoke
+          screencapture -x smoke/desktop.png || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nuclear-macos-smoke-${{ matrix.runner }}
+          path: smoke/
+
+  # The app and UI test suite on macOS, as the Linux `tests` job runs it.
+  macos-tests:
+    name: UI and app tests (macOS)
+    if: github.event_name != 'pull_request'
+    runs-on: macos-14
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: macos-tests
+      - uses: taiki-e/install-action@1168f6810a3cb30a3514bf5756a3b7f0422c6df8 # v2.87.28
+        with:
+          tool: cargo-nextest
+      - name: Test
+        run: cargo nextest run --cargo-profile ci --profile ci --locked --no-tests=pass --lib --bins -p solidcraft-ui-egui -p solidcraft-io -p solidcraft -p solidcraft-cli
