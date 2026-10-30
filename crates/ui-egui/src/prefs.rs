@@ -553,6 +553,20 @@ pub enum OrbitAround {
     Cursor,
 }
 
+/// How dragged manipulators find their step (the step menu beside the browser's title,
+/// `crate::manipulator_step`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepMode {
+    /// The zoom where the arrow is, kept fine enough for the part being worked on (the default).
+    #[default]
+    Automatic,
+    /// The zoom alone: the step before the step menu.
+    Zoom,
+    /// `manipulator_step_mm` whatever the view.
+    Fixed,
+}
+
 /// Where the view goes when a sketch ends (Preferences: "When a sketch ends", #7038).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1169,6 +1183,13 @@ preference_settings! {
     sketch_tracking_guides: bool = true, PAGE_SKETCH;
     /// Whether Alt/Option also frees gizmo / canvas manipulator arrows (Primary always does).
     manipulator_free_alt: bool = true, PAGE_SKETCH;
+    /// How dragged manipulator arrows step: Automatic (zoom and part size), Zoom (zoom alone, the
+    /// old step) or Fixed (`manipulator_step_mm`). Chosen in the menu beside the browser's title.
+    manipulator_step: StepMode = StepMode::default(), PAGE_SKETCH;
+    /// The Fixed step, in millimetres.
+    manipulator_step_mm: f64 = 1.0, PAGE_SKETCH, accept(crate::manipulator_step::LINEAR_RANGE);
+    /// The step dragged rotations snap to, in degrees, in every mode.
+    manipulator_angle_deg: f64 = 5.0, PAGE_SKETCH, accept(crate::manipulator_step::ANGLE_RANGE);
     /// A sketch's icon in History and the browser takes the colour of its solve state, and its
     /// tooltip names the state (#7245). Off: every sketch has the same icon, as before.
     sketch_state_icons: bool = true, PAGE_SKETCH => check_id("prefs.sketch_state_icons");
@@ -3173,6 +3194,9 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     }
     if !accepted::ui_scale(&new) || !accepted::look_at_speed(&new) {
         return Err("`ui_scale` must be 0.5…2.5 and `look_at_speed` 0.25…4".into());
+    }
+    if !accepted::manipulator_step_mm(&new) || !accepted::manipulator_angle_deg(&new) {
+        return Err("`manipulator_step_mm` must be 0.0001…10000 and `manipulator_angle_deg` 0.01…180".into());
     }
     if solidcraft_engine::doc::display_quality::DisplayQuality::parse(&new.display_quality).is_none() {
         return Err("`display_quality` must be coarse, normal, fine or ultra".into());
