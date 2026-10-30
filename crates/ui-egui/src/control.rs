@@ -446,6 +446,8 @@ pub fn view_png(app: &SolveApp, w: u32, h: u32) -> Result<Vec<u8>, String> {
 }
 
 pub fn handle(app: &mut SolveApp, ctx: &egui::Context, req: &ControlRequest) -> Outcome {
+    // What follows is driven by a script or an agent, not the user's own use.
+    app.control_at = Some(ctx.input(|i| i.time));
     let scope = match request_scope(app, &req.params) {
         Ok(Some(scope)) => scope,
         Ok(None) => return dispatch(app, ctx, &req.method, &req.params),
@@ -632,6 +634,9 @@ fn dispatch(app: &mut SolveApp, ctx: &egui::Context, method: &str, p: &Value) ->
                         return err(e);
                     }
                     u.ribbon_context = app.ui.ribbon_context.clone();
+                    if let Some(dark) = p.get("dark").and_then(Value::as_bool) {
+                        crate::prefs::match_dark(app, dark);
+                    }
                     app.ui = u;
                     app.session.visibility = v;
                     ok(ui_state(app))

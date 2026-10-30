@@ -206,6 +206,7 @@ pub mod preview;
 mod primitive_placement;
 #[cfg(test)]
 mod primitive_units_tests;
+pub mod recommend;
 pub mod recovery_ui;
 pub mod ref_images;
 mod render_ui;
@@ -549,6 +550,11 @@ pub struct SolveApp {
     pub(crate) apply_gate: Option<std::sync::Arc<std::sync::Mutex<std::sync::mpsc::Receiver<()>>>>,
     /// The last command started interactively (id, label), for Repeat.
     pub last_command: Option<(String, String)>,
+    /// When (egui input time) the control channel last handled a request: starts then are a
+    /// script's or an agent's, not counted by the recommended tools.
+    pub control_at: Option<f64>,
+    /// The recommended tools' state for this run.
+    pub recommend: recommend::State,
     /// Bodies copied with Copy (by name), pasted into the active component by Paste.
     pub copied_bodies: Vec<String>,
     /// Text a copy left for the system clipboard, written on the next frame (so a paste event
@@ -750,6 +756,8 @@ impl SolveApp {
             #[cfg(test)]
             apply_gate: None,
             last_command: None,
+            control_at: None,
+            recommend: Default::default(),
             copied_bodies: Vec::new(),
             clipboard_text: None,
             copied_placements: Vec::new(),
@@ -872,10 +880,7 @@ impl SolveApp {
                     Ok(solidcraft_gpu::view::MsaaCheck::Fallback) => {
                         installed.samples = 1;
                         self.msaa_compatibility = true;
-                        eprintln!(
-                            "Nuclear graphics: anti-aliasing check failed at {}x and passed at 1x; using 1x for this session",
-                            scene.samples
-                        );
+                        eprintln!("Nuclear graphics: anti-aliasing check failed at {}x and passed at 1x; using 1x for this session", scene.samples);
                     }
                     Ok(solidcraft_gpu::view::MsaaCheck::FailedAtOne) => {
                         eprintln!("Nuclear graphics: anti-aliasing check also failed at 1x; keeping {}x", scene.samples);
@@ -1693,6 +1698,9 @@ impl SolveApp {
         {
             self.last_command = Some((spec.id.to_string(), spec.label.to_string()));
         }
+        if solidcraft_engine::find_command(id).is_some() && self.interactive(id) {
+            recommend::record(self, id);
+        }
         if let Some(mut t) = tools::Tool::for_command(id) {
             let state = self.session.world_state();
             let sketch = self.session.active_sketch.and_then(|s| state.sketch(s)).map(|ss| &ss.sketch);
@@ -2265,7 +2273,16 @@ impl SolveApp {
 
     /// Is the 3D view dark? As the window, unless Preferences give the view its own (#4146).
     pub fn viewport_dark(&self) -> bool {
-        self.preferences.viewport_theme.dark().unwrap_or(self.ui.dark)
+        self.viewport_side().unwrap_or(self.ui.dark)
+    }
+
+    /// The view's own dark or light: a background of its own decides by its brightness, else
+    /// the 3D view preference (#4146). `None`: as the window.
+    fn viewport_side(&self) -> Option<bool> {
+        match self.preferences.viewport_background.colors(&self.preferences.viewport_custom) {
+            Some((top, bottom)) => Some(theme::background_is_dark(top, bottom)),
+            None => self.preferences.viewport_theme.dark(),
+        }
     }
 
     /// Hand the view to an external navigation device without a pending mouse orbit or spin
@@ -2311,7 +2328,11 @@ impl SolveApp {
         self.esc_handled = false;
         prefs::apply(self, ctx);
         // The view's own dark or light only changes tokens, not egui's visuals: no restyle.
-        theme::set_viewport_dark(self.preferences.viewport_theme.dark());
+        theme::set_viewport_dark(self.viewport_side());
+        theme::set_viewport_background(self.preferences.viewport_background.colors(&self.preferences.viewport_custom));
+        // A short window gets the compact ribbon whatever the preference: the view keeps its room.
+        let short = ctx.content_rect().height() < toolbar::SHORT_WINDOW;
+        toolbar::set_density(if short { toolbar::Density::Compact } else { self.preferences.toolbar_density });
         if !self.styled || theme::is_dark() != self.ui.dark || theme::vision() != self.preferences.color_vision {
             theme::set_dark(self.ui.dark);
             theme::set_vision(self.preferences.color_vision);

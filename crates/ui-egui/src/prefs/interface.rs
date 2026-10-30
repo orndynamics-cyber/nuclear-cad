@@ -29,7 +29,7 @@ fn origin_plane_names(app: &mut SolveApp, ui: &mut egui::Ui) {
 
 pub(super) fn interface(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
     ui_kit::settings_heading(ui, app.tr("prefs.interface"), app.tr("prefs.interface_note"));
-    ui_kit::settings_section(ui, "theme", app.tr("ui.theme"), |ui| {
+    ui_kit::settings_section(ui, "theme", app.tr("prefs.appearance"), |ui| {
         theme_row(app, ui);
         ui_kit::tab_accent_strip(ui);
         // The 3D view in the theme's colours, or the Light or Dark theme's (#4146).
@@ -58,6 +58,33 @@ pub(super) fn interface(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
             if FOLLOW_AVAILABLE {
                 follow_row(app, ui);
             }
+            viewport_background_rows(app, ui);
+            // Ribbon density: larger icons and targets, or the tighter layout.
+            let label = app.tr("prefs.toolbar_density");
+            ui_kit::row(ui, label, |ui| {
+                let densities = crate::toolbar::Density::ALL;
+                let labels: Vec<_> = densities.iter().map(|d| crate::i18n::tr(d.label_id())).collect();
+                let mut selected = densities.iter().position(|d| *d == app.preferences.toolbar_density).unwrap_or(0);
+                if ui_kit::settings_segments(ui, label, &mut selected, &labels)
+                    && let Some(density) = densities.get(selected)
+                {
+                    app.preferences.toolbar_density = *density;
+                }
+            });
+            for density in crate::toolbar::Density::ALL {
+                if let Some(at) = crate::scenario::handle_at(&format!("dialog:{label}:{}", crate::i18n::tr(density.label_id()))) {
+                    crate::scenario::publish_handle(&format!("prefs:toolbar_density:{}", density.id()), at);
+                }
+            }
+            // Theme, density and the view's background back to Nuclear's; nothing else changes.
+            ui_kit::row(ui, "", |ui| {
+                let restore = ui_kit::button(ui, app.tr("prefs.restore_appearance"), ui_kit::Button::Normal)
+                    .on_hover_text(app.tr("prefs.restore_appearance_note"));
+                crate::scenario::publish_target("prefs:restore_appearance", restore.rect);
+                if restore.clicked() {
+                    restore_appearance(app);
+                }
+            });
         });
     });
     ui_kit::settings_section(ui, "layout", app.tr("prefs.layout"), |ui| {
@@ -327,4 +354,87 @@ pub(super) fn interface(app: &mut SolveApp, ui: &mut egui::Ui, t: &Tokens) {
         }
         ui_kit::text(ui, app.tr("ui.colour_vision_note"), ui_kit::Text::Hint("colour_vision"));
     });
+    ui_kit::settings_section(ui, "recommendations", app.tr("prefs.recommended_tools"), |ui| {
+        ui_kit::settings_form(ui, t.form_label_width + t.space_16 + t.space_6, |ui| {
+            ui_kit::row(ui, "", |ui| {
+                let check = setting::adaptive_tools(app, ui).on_hover_text(app.tr("prefs.adaptive_tools_note"));
+                crate::scenario::publish_target("prefs:adaptive_tools", check.rect);
+            });
+            ui_kit::row(ui, "", |ui| {
+                ui.add_enabled_ui(app.preferences.adaptive_tools, |ui| {
+                    let check = setting::adaptive_frozen(app, ui).on_hover_text(app.tr("prefs.adaptive_frozen_note"));
+                    crate::scenario::publish_target("prefs:adaptive_frozen", check.rect);
+                });
+            });
+            ui_kit::row(ui, "", |ui| {
+                let reset = ui_kit::button(ui, app.tr("prefs.adaptive_reset"), ui_kit::Button::Normal);
+                crate::scenario::publish_target("prefs:adaptive_reset", reset.rect);
+                if reset.clicked() {
+                    crate::recommend::reset(app);
+                    app.set_status(app.tr("prefs.adaptive_reset_done").to_string(), false);
+                }
+            });
+            ui_kit::text(ui, app.tr("prefs.adaptive_privacy"), ui_kit::Text::Hint("adaptive_privacy"));
+        });
+    });
+}
+
+/// The 3D view's background, apart from the theme: a choice, and for Custom its colour with an
+/// immediate preview and a way back to the default colour. Only the background and grid change.
+fn viewport_background_rows(app: &mut SolveApp, ui: &mut egui::Ui) {
+    let backgrounds = crate::theme::ViewportBackground::ALL;
+    let labels: Vec<&str> = backgrounds.iter().map(|b| crate::i18n::tr(b.label_id())).collect();
+    let mut selected = backgrounds.iter().position(|b| *b == app.preferences.viewport_background).unwrap_or(0);
+    let label = app.tr("prefs.viewport_background");
+    let response = ui_kit::choice_row(ui, label, "viewport_background", &mut selected, &labels);
+    crate::scenario::publish_target("prefs:viewport_background", response.rect);
+    if let Some(background) = backgrounds.get(selected)
+        && *background != app.preferences.viewport_background
+    {
+        app.preferences.viewport_background = *background;
+    }
+    if app.preferences.viewport_background != crate::theme::ViewportBackground::Custom {
+        return;
+    }
+    let default = Prefs::default().viewport_custom;
+    ui_kit::row(ui, app.tr("prefs.viewport_bg_colour"), |ui| {
+        ui.horizontal(|ui| {
+            let colour = crate::theme::parse_hex(&app.preferences.viewport_custom);
+            let (swatch, _) = ui.allocate_exact_size(egui::vec2(22.0, 22.0), egui::Sense::hover());
+            let t = Tokens::get();
+            ui.painter().rect(swatch, t.radius_sm, colour.unwrap_or(t.panel), t.control_border_stroke(t.control_border), egui::StrokeKind::Inside);
+            let mut text =
+                ui.data(|d| d.get_temp::<String>(egui::Id::new("sc_viewport_custom"))).unwrap_or_else(|| app.preferences.viewport_custom.clone());
+            ui.set_max_width(96.0);
+            let (_, changed) = ui_kit::text_field(ui, &mut text, "#rrggbb");
+            // Applied as soon as it reads as a colour: the view shows it at once.
+            if changed && let Some(c) = crate::theme::parse_hex(&text) {
+                app.preferences.viewport_custom = crate::theme::format_hex(c);
+            }
+            ui.data_mut(|d| d.insert_temp(egui::Id::new("sc_viewport_custom"), text));
+        });
+    });
+    ui_kit::row(ui, "", |ui| {
+        let restore = ui_kit::button(ui, app.tr("prefs.viewport_bg_restore"), ui_kit::Button::Enabled(app.preferences.viewport_custom != default));
+        crate::scenario::publish_target("prefs:viewport_bg_restore", restore.rect);
+        if restore.clicked() {
+            app.preferences.viewport_custom = default;
+            ui.data_mut(|d| d.remove::<String>(egui::Id::new("sc_viewport_custom")));
+        }
+    });
+}
+
+/// Restore appearance defaults: the theme, the view's colours and background, the logo and the
+/// ribbon's density and labels. Projects, pins, shortcuts and other preferences stay.
+pub(crate) fn restore_appearance(app: &mut SolveApp) {
+    let d = Prefs::default();
+    app.preferences.theme_follow.clear();
+    select_theme(app, &d.theme);
+    app.preferences.viewport_theme = d.viewport_theme;
+    app.preferences.viewport_background = d.viewport_background;
+    app.preferences.viewport_custom = d.viewport_custom;
+    app.preferences.logo_accent = d.logo_accent;
+    app.preferences.toolbar_density = d.toolbar_density;
+    app.preferences.ribbon_labels = d.ribbon_labels;
+    app.styled = false;
 }

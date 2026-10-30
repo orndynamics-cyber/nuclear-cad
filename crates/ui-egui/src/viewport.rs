@@ -7019,6 +7019,9 @@ mod tests {
             return;
         }
         let mut h = crate::scenario::Harness::new();
+        // The built-in Dark and Light themes, whose backgrounds the picture is compared with.
+        h.app.preferences.theme = "dark".into();
+        h.frame();
         h.app.run("solid.box", json!({"length": 40, "width": 30, "height": 20})).unwrap();
         h.app.cam = solidcraft_engine::view::home_camera(&h.app.session);
         for dark in [false, true, false] {

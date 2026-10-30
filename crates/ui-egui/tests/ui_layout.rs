@@ -125,7 +125,7 @@ fn docked_ribbon_geometry_and_search() {
             let workspace = rect_of("ribbon:workspace").unwrap();
             let search = rect_of("ribbon:search").unwrap();
             assert_eq!(ribbon.top(), toolbar::APP_BAR_HEIGHT);
-            assert_eq!(ribbon.height(), 117.0);
+            assert_eq!(ribbon.height(), toolbar::RIBBON_HEIGHT);
             assert_eq!(ribbon.width(), width);
             assert_eq!(workspace.width(), 88.0);
             assert_eq!(workspace.top(), ribbon.top());
@@ -182,7 +182,7 @@ fn docked_ribbon_geometry_and_search() {
         h.call("ui.resize", json!({"width":1600,"height":1000}));
         h.frames(4);
         let button = rect_of("button:solid.extrude").unwrap();
-        assert_eq!(button.height(), 60.0);
+        assert_eq!(button.height(), 66.0);
         assert!(button.width() >= 54.0);
         let section = rect_of("ribbon:section:MODEL:CREATE").unwrap();
         assert_eq!(section.height(), 20.0);

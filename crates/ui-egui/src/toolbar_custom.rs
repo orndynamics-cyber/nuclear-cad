@@ -325,6 +325,17 @@ pub fn command_items(app: &SolveApp, id: &str) -> Vec<Item> {
         Item::action("ui.toolbarPin", "Pin to Toolbar", "plus").with(json!({ "command": id }))
     });
     v.push(Item::action("ui.shortcutPin", if fav { "Unpin from Shortcuts" } else { "Pin to Shortcuts" }, "star").with(json!({ "command": id })));
+    // A recommended tool: hide it, keep the ones shown, or turn recommendations off.
+    if !on && crate::recommend::is_shown(app, id) {
+        v.push(Item::sep());
+        v.push(Item::action("ui.recommendHide", "Hide Recommendation", "eye").with(json!({ "command": id })));
+        v.push(Item::action(
+            "ui.recommendFreeze",
+            if app.preferences.adaptive_frozen { "Let Recommendations Change" } else { "Freeze Recommendations" },
+            "settings",
+        ));
+        v.push(Item::action("ui.recommendOff", "Turn Off Recommendations", "close"));
+    }
     v.push(Item::sep());
     v.push(Item::action("ui.toolbarCustomize", "Customize Toolbar…", "settings"));
     v.push(Item::action("ui.toolbarReset", "Reset Toolbar", "restore").with(json!({ "tab": tab })));
@@ -353,6 +364,9 @@ pub fn run(app: &mut SolveApp, action: &str, p: &Value) {
         "ui.toolbarReset" => reset(app, &tab),
         "ui.toolbarCustomize" => app.toolbar_custom.customizing = true,
         "ui.shortcutPin" => app.sbox.toggle_pin(id),
+        "ui.recommendHide" => crate::recommend::hide(app, id),
+        "ui.recommendFreeze" => app.preferences.adaptive_frozen = !app.preferences.adaptive_frozen,
+        "ui.recommendOff" => app.preferences.adaptive_tools = false,
         _ => {}
     }
 }

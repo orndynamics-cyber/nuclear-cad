@@ -1992,16 +1992,17 @@ mod tests {
 
     #[test]
     fn history_follows_the_browsers_translucency_only_under_the_browser() {
-        let opaque = Tokens::get().panel;
-        let translucent = opaque.gamma_multiply(crate::browser::BROWSER_FLOAT_ALPHA);
-        for (floating, under_browser, browser_float, expected) in [
-            (true, true, true, translucent),
-            (true, true, false, opaque),
-            (true, false, true, opaque),
-            (false, true, true, opaque),
-            (false, false, true, opaque),
+        for (floating, under_browser, browser_float, see_through) in [
+            (true, true, true, true),
+            (true, true, false, false),
+            (true, false, true, false),
+            (false, true, true, false),
+            (false, false, true, false),
         ] {
             let mut h = Harness::new();
+            // The theme the harness drew with (the default is a theme file).
+            let opaque = Tokens::get().panel;
+            let expected = if see_through { opaque.gamma_multiply(crate::browser::BROWSER_FLOAT_ALPHA) } else { opaque };
             h.app.ui.layout = if floating { crate::shell::LayoutMode::Floating } else { crate::shell::LayoutMode::Docked };
             h.app.ui.show_timeline = true;
             h.app.preferences.timeline_left = true;

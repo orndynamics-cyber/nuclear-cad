@@ -31,6 +31,9 @@ thread_local! {
     /// The 3D view's own dark or light when Preferences give it one ([`ViewportTheme`], #4146),
     /// per thread like the rest. `None`: the view is as dark as the window.
     static VIEWPORT_DARK: Cell<Option<bool>> = const { Cell::new(None) };
+    /// The 3D view's own background ([`ViewportBackground`]), top and bottom, per thread like
+    /// the rest. `None`: the theme's.
+    static VIEWPORT_BG: Cell<Option<(Color32, Color32)>> = const { Cell::new(None) };
 }
 
 /// Three structural border levels plus independent content and control outlines.
@@ -483,6 +486,109 @@ impl<'de> Deserialize<'de> for ViewportTheme {
     }
 }
 
+/// The 3D view's background apart from the theme (Nuclear appearance settings): only the
+/// background and grid change; materials, geometry and tessellation do not.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ViewportBackground {
+    #[default]
+    Theme,
+    Studio,
+    Graphite,
+    Black,
+    LightGray,
+    Custom,
+}
+
+impl ViewportBackground {
+    pub const ALL: [ViewportBackground; 6] = [
+        ViewportBackground::Theme,
+        ViewportBackground::Studio,
+        ViewportBackground::Graphite,
+        ViewportBackground::Black,
+        ViewportBackground::LightGray,
+        ViewportBackground::Custom,
+    ];
+
+    /// The saved value (`ui.prefs` `viewport_background`).
+    pub fn id(self) -> &'static str {
+        match self {
+            ViewportBackground::Theme => "theme",
+            ViewportBackground::Studio => "studio",
+            ViewportBackground::Graphite => "graphite",
+            ViewportBackground::Black => "black",
+            ViewportBackground::LightGray => "light_gray",
+            ViewportBackground::Custom => "custom",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<ViewportBackground> {
+        ViewportBackground::ALL.into_iter().find(|m| m.id() == id)
+    }
+
+    /// Its name in the Preferences (a message id).
+    pub fn label_id(self) -> &'static str {
+        match self {
+            ViewportBackground::Theme => "prefs.viewport_bg_theme",
+            ViewportBackground::Studio => "prefs.viewport_bg_studio",
+            ViewportBackground::Graphite => "prefs.viewport_bg_graphite",
+            ViewportBackground::Black => "prefs.viewport_bg_black",
+            ViewportBackground::LightGray => "prefs.viewport_bg_light_gray",
+            ViewportBackground::Custom => "prefs.viewport_bg_custom",
+        }
+    }
+
+    /// Top and bottom of the background, or `None` for the theme's own. `custom` is the custom
+    /// colour (`#rrggbb`; an unreadable one is the default grey).
+    pub fn colors(self, custom: &str) -> Option<(Color32, Color32)> {
+        let solid = |c: Color32| Some((c, c));
+        match self {
+            ViewportBackground::Theme => None,
+            ViewportBackground::Studio => Some((Color32::from_rgb(0x30, 0x35, 0x3c), Color32::from_rgb(0x16, 0x18, 0x1b))),
+            ViewportBackground::Graphite => solid(Color32::from_rgb(0x2a, 0x2e, 0x34)),
+            ViewportBackground::Black => solid(Color32::from_rgb(0x05, 0x05, 0x06)),
+            ViewportBackground::LightGray => solid(Color32::from_rgb(0xd4, 0xd6, 0xd9)),
+            ViewportBackground::Custom => solid(parse_hex(custom).unwrap_or(Color32::from_rgb(0x8a, 0x90, 0x99))),
+        }
+    }
+}
+
+/// From saved preferences: an unknown value is Theme.
+impl<'de> Deserialize<'de> for ViewportBackground {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Ok(v.as_str().and_then(ViewportBackground::from_id).unwrap_or_default())
+    }
+}
+
+/// `#rrggbb` as an opaque colour.
+pub fn parse_hex(text: &str) -> Option<Color32> {
+    let hex = text.trim().strip_prefix('#')?;
+    if hex.len() != 6 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| hex.get(i..i + 2).and_then(|h| u8::from_str_radix(h, 16).ok());
+    Some(Color32::from_rgb(byte(0)?, byte(2)?, byte(4)?))
+}
+
+/// `#rrggbb` of an opaque colour.
+pub fn format_hex(c: Color32) -> String {
+    format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b())
+}
+
+/// Is a background dark enough for the dark side's edges, grid and selection? (Relative
+/// luminance of its middle.)
+pub fn background_is_dark(top: Color32, bottom: Color32) -> bool {
+    let mid = top.lerp_to_gamma(bottom, 0.5);
+    contrast_ratio(mid, Color32::WHITE) >= contrast_ratio(mid, Color32::BLACK)
+}
+
+/// Give the 3D view its own background (`None`: the theme's). Its grid follows from it, so it
+/// stays visible on any colour; the view's dark or light side is set apart ([`set_viewport_dark`]).
+pub fn set_viewport_background(bg: Option<(Color32, Color32)>) {
+    VIEWPORT_BG.set(bg);
+}
+
 /// The colour vision mode on now (on this thread).
 pub fn vision() -> ColorVision {
     VISION.with(Cell::get)
@@ -875,14 +981,29 @@ impl Tokens {
     /// mode being chosen before it is applied (#7152).
     pub fn get_in(mode: ColorVision) -> Tokens {
         let window = Tokens::themed(is_dark(), mode);
-        if viewport_dark() == is_dark() { window } else { window.with_viewport(Tokens::themed(viewport_dark(), mode)) }
+        let t = if viewport_dark() == is_dark() { window } else { window.with_viewport(Tokens::themed(viewport_dark(), mode)) };
+        t.with_background()
+    }
+
+    /// These tokens with the view's own background ([`set_viewport_background`]), if any, and a
+    /// grid drawn from it.
+    fn with_background(mut self) -> Tokens {
+        if let Some((top, bottom)) = VIEWPORT_BG.get() {
+            let ink = if background_is_dark(top, bottom) { Color32::WHITE } else { Color32::BLACK };
+            let mid = top.lerp_to_gamma(bottom, 0.5);
+            self.viewport_top = top;
+            self.viewport_bottom = bottom;
+            self.grid = mid.lerp_to_gamma(ink, 0.09);
+            self.grid_major = mid.lerp_to_gamma(ink, 0.17);
+        }
+        self
     }
 
     /// The tokens of the 3D view's side (#4146), for a window colour drawn straight onto the view
     /// with nothing behind it (a status line, a label or a warning beside the geometry), so it
     /// reads on the view's background. As [`Tokens::get`] unless the view has its own side.
     pub fn view() -> Tokens {
-        Tokens::themed(viewport_dark(), vision())
+        Tokens::themed(viewport_dark(), vision()).with_background()
     }
 
     /// These tokens with the colours drawn in the 3D view taken from `view`: the background and

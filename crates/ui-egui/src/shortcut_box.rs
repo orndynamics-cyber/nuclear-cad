@@ -884,7 +884,7 @@ mod tests {
         // Parent bba2183a: 30 pt tab row, 4 pt inset on every side.
         let toolbar = crate::scenario::rect_of("toolbar").unwrap();
         assert_eq!(crate::toolbar::TAB_ROW_HEIGHT, 30.0);
-        assert_eq!(crate::toolbar::RIBBON_HEIGHT, 117.0);
+        assert_eq!(crate::toolbar::RIBBON_HEIGHT, 123.0);
         assert_eq!(closed.size(), vec2(ui_kit::CommandSearch::closed_width(&h.ctx), 22.0));
         assert_eq!(closed.right(), toolbar.right() - 4.0);
         assert_eq!(closed.top(), toolbar.top() + 4.0);

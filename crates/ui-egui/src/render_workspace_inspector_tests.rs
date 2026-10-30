@@ -15,7 +15,9 @@ fn reveal_inspector_target(h: &mut Harness, target: &str) -> egui::Rect {
         let rect = crate::scenario::rect_of(target).unwrap();
         let inspector = crate::scenario::rect_of("render:inspector").unwrap();
         let top = crate::scenario::rect_of("render:inspector:header").unwrap().bottom() + Tokens::get().space_8;
-        let bottom = inspector.bottom() - Tokens::get().space_8;
+        // The editor's footer (Save to library…) covers the bottom of the scrolled controls.
+        let footer = crate::scenario::rect_of("dialog:editor_footer").filter(|f| inspector.intersects(*f)).map_or(inspector.bottom(), |f| f.top());
+        let bottom = footer.min(inspector.bottom()) - Tokens::get().space_8;
         if rect.top() >= top && rect.bottom() <= bottom {
             return rect;
         }
@@ -1159,7 +1161,8 @@ fn aging_tab_adds_reorders_disables_and_persists_layers_without_engineering_edit
     h.step(&json!({"click":{"handle":"render:aging-up"}})).unwrap();
     h.frames(2);
     assert_eq!(h.app.render_workspace.view.studio.aging.get(0).unwrap().kind, AgingKind::Dust);
-    h.step(&json!({"click":{"handle":"render:aging-enabled"}})).unwrap();
+    let enabled = reveal_inspector_target(&mut h, "render:aging-enabled");
+    h.call("ui.click", json!({"x":enabled.center().x,"y":enabled.center().y}));
     h.frames(2);
     assert!(!h.app.render_workspace.view.studio.aging.get(0).unwrap().enabled);
     assert_eq!(h.app.session.doc.to_json(), before, "editing layers only edits the render draft");

@@ -713,17 +713,17 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
     let mut pick: Option<usize> = None;
     let mut shut: Option<usize> = None;
     // Each tab fits its name (up to MAX_FIT) while all of them fit; otherwise they share the room.
-    const MAX_FIT: f32 = 200.0;
-    let natural: Vec<f32> = info
+    const MAX_FIT: f32 = 240.0;
+    let names = display_names(app, &info, &paths);
+    let natural: Vec<f32> = names
         .iter()
-        .map(|(name, dirty)| {
-            let shown_name = crate::i18n::Locale::for_language(&app.preferences.language).given_name(name);
-            let label = format!("{shown_name}{}", if *dirty { " •" } else { "" });
-            let text = ui.painter().layout_no_wrap(label, crate::fonts::semibold(crate::theme::Tokens::get().font_button), t.app_bar_text).size().x;
-            (text + 40.0).clamp(72.0, MAX_FIT)
+        .map(|name| {
+            let text = ui.painter().layout_no_wrap(name.clone(), crate::fonts::semibold(t.font_heading), t.app_bar_text).size().x;
+            (text + 52.0).clamp(MIN_TAB, MAX_FIT)
         })
         .collect();
-    let fit_all = shown == n && natural.iter().sum::<f32>() <= x1 - x0 - 34.0;
+    let list_room = if n > 1 { LIST_BUTTON } else { 0.0 };
+    let fit_all = shown == n && natural.iter().sum::<f32>() <= x1 - x0 - 34.0 - list_room;
     // A right-click on a tab opens its menu (#3055): the tab and where the menu opens.
     let menu_id = egui::Id::new("sc_doc_tab_menu");
     let mut menu: Option<(usize, egui::Pos2)> = ui.ctx().data(|d| d.get_temp(menu_id));
@@ -759,13 +759,14 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
     order.extend(held.map(|(from, _)| from));
     let mut dropped: Option<(usize, usize)> = None;
     for i in order {
-        let Some((name, dirty)) = info.get(i) else { continue };
+        let Some((_, dirty)) = info.get(i) else { continue };
+        let name_display = names.get(i).cloned().unwrap_or_default();
         let w = width(i);
         let left = match held {
             Some((from, left)) if from == i => left,
             _ => i.checked_sub(first).and_then(|k| lefts.get(k)).copied().unwrap_or(x0),
         };
-        let tr = Rect::from_min_size(pos2(left, r.top() + 4.0), vec2(w - 2.0, r.height() - 8.0));
+        let tr = Rect::from_min_size(pos2(left, r.top() + 3.0), vec2(w - 2.0, r.height() - 6.0));
         let active = !app.home.open && (i == app.docs.active || app.docs.slots.is_empty());
         let resp = ui.interact(tr, ui.id().with(("doc_tab", i)), Sense::click_and_drag());
         crate::scenario::publish_target(&format!("tab:design:{i}"), tr);
@@ -795,21 +796,25 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         let lit = resp.hovered() || held.is_some_and(|(from, _)| from == i);
         tab_shape(ui.painter(), &t, tr, active, lit || resp.has_focus());
         let ink = if active || lit { t.app_bar_text } else { t.app_bar_text.gamma_multiply(0.7) };
-        let name_display = crate::i18n::Locale::for_language(&app.preferences.language).given_name(name);
-        let label = format!("{name_display}{}", if *dirty { " •" } else { "" });
-        let font = if active {
-            crate::fonts::semibold(crate::theme::Tokens::get().font_button)
-        } else {
-            FontId::proportional(crate::theme::Tokens::get().font_button)
-        };
-        let g = ui.painter().layout_no_wrap(label, font, ink);
-        let text_w = (tr.width() - 30.0).max(10.0);
+        let font = if active { crate::fonts::semibold(t.font_heading) } else { FontId::proportional(t.font_heading) };
+        let g = ui.painter().layout_no_wrap(name_display.clone(), font, ink);
+        let text_w = (tr.width() - 42.0).max(10.0);
         let tip = tab_tooltip(&name_display, paths.get(i).cloned().flatten().as_deref(), g.size().x > text_w);
-        let clip = Rect::from_min_size(tr.min, vec2(text_w + 10.0, tr.height()));
-        ui.painter().with_clip_rect(clip).galley(pos2(tr.left() + 10.0, tr.center().y - g.size().y / 2.0), g, ink);
-        // ×
-        let xr = Rect::from_center_size(pos2(tr.right() - 13.0, tr.center().y), vec2(16.0, 16.0));
-        let show_close = active || resp.hovered() || ui.rect_contains_pointer(tr);
+        let tip = if *dirty { format!("{tip}\n{}", app.tr("ui.unsaved_changes")) } else { tip };
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::SelectableLabel, true, active, &name_display));
+        let clip = Rect::from_min_size(tr.min, vec2(text_w + 12.0, tr.height()));
+        ui.painter().with_clip_rect(clip).galley(pos2(tr.left() + 12.0, tr.center().y - g.size().y / 2.0), g, ink);
+        // The active design: an accent line along the tab's foot, with the lifted surface.
+        if active {
+            let line = Rect::from_min_max(pos2(tr.left() + 6.0, tr.bottom() - 2.5), pos2(tr.right() - 6.0, tr.bottom()));
+            ui.painter().rect_filled(line, 1, t.accent);
+        }
+        // × (a 24 point target); unsaved changes show a filled dot in its place until hovered.
+        let xr = Rect::from_center_size(pos2(tr.right() - 16.0, tr.center().y), vec2(24.0, 24.0));
+        let show_close = resp.hovered() || ui.rect_contains_pointer(tr) || (active && !*dirty);
+        if *dirty && !show_close {
+            ui.painter().circle_filled(xr.center(), 4.0, ink);
+        }
         let xresp = ui.interact(xr, ui.id().with(("doc_close", i)), if show_close { Sense::click() } else { Sense::hover() });
         crate::scenario::publish_target(&format!("tab:close:{i}"), xr);
         if show_close && (xresp.hovered() || xresp.has_focus()) {
@@ -818,7 +823,7 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         if show_close {
             crate::icons::paint_app_bar(
                 ui.painter(),
-                Rect::from_center_size(xr.center(), vec2(14.0, 14.0)),
+                Rect::from_center_size(xr.center(), vec2(16.0, 16.0)),
                 "close",
                 if xresp.hovered() || xresp.has_focus() { 1.0 } else { 0.55 },
             );
@@ -839,24 +844,28 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
         None => d.remove::<TabDrag>(drag_id),
     });
     let mut x = strip_end;
-    // More tabs than fit: a chevron lists them all.
-    if shown < n {
-        let mr = Rect::from_center_size(pos2(x + 12.0, r.center().y), vec2(20.0, 22.0));
+    // Open documents: how many are open, and a list of them all (with where each is saved),
+    // whether or not every tab fits.
+    if n > 1 {
+        let mr = Rect::from_min_size(pos2(x + 4.0, r.top() + 7.0), vec2(LIST_BUTTON - 6.0, r.height() - 14.0));
         let mresp = ui.interact(mr, ui.id().with("doc_more"), Sense::click());
         crate::scenario::publish_handle("tab:overflow", mr.center());
-        if mresp.hovered() {
+        crate::scenario::publish_target("tab:list", mr);
+        let id = egui::Id::new("sc_doc_more");
+        let open = ui.ctx().data(|d| d.get_temp::<bool>(id).unwrap_or(false));
+        if mresp.hovered() || mresp.has_focus() || open {
             ui.painter().rect_filled(mr, t.radius_sm, t.app_bar_hover_button);
         }
-        ui.painter().text(
-            mr.center(),
-            egui::Align2::CENTER_CENTER,
-            format!("»{}", n - shown),
-            FontId::proportional(crate::theme::Tokens::get().font_body),
-            t.app_bar_text,
-        );
-        let id = egui::Id::new("sc_doc_more");
-        if mresp.clone().on_hover_text(crate::i18n::tr_label("All open designs")).clicked() {
-            ui.ctx().data_mut(|d| d.insert_temp(id, !d.get_temp::<bool>(id).unwrap_or(false)));
+        // Hidden tabs: the count is accented so it is noticed.
+        let ink = if shown < n { t.accent } else { t.app_bar_text };
+        let count = ui.painter().layout_no_wrap(n.to_string(), crate::fonts::semibold(t.font_body), ink);
+        let count_w = count.size().x;
+        ui.painter().galley(pos2(mr.center().x - (count_w + 9.0) / 2.0, mr.center().y - count.size().y / 2.0), count, ink);
+        dropdown_caret(ui.painter(), pos2(mr.center().x + count_w / 2.0 + 1.5, mr.center().y + 1.0), ink);
+        let title = crate::i18n::format("ui.open_documents_count", &[("count", &n.to_string())]);
+        mresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &title));
+        if mresp.clone().on_hover_text(&title).clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(id, !open));
         }
         if ui.ctx().data(|d| d.get_temp::<bool>(id).unwrap_or(false)) {
             let resp = Container::new(ui.ctx(), Surface::Popup)
@@ -865,20 +874,27 @@ pub fn tabs(app: &mut SolveApp, ui: &mut egui::Ui, r: Rect, x0: f32, x1: f32) {
                 .order(egui::Order::Foreground)
                 .show(ui.ctx(), |ui| {
                     crate::context_menu::menu_frame(ui, |ui| {
-                        for (i, (name, dirty)) in info.iter().enumerate() {
+                        ui_kit::text(ui, &title, ui_kit::Text::Hint("open_documents"));
+                        for (i, ((_, dirty), name)) in info.iter().zip(&names).enumerate() {
+                            let place = paths
+                                .get(i)
+                                .cloned()
+                                .flatten()
+                                .map_or_else(|| crate::i18n::tr_label("Not saved yet").to_string(), |p| crate::home::friendly_path(&p));
                             let label = format!("{name}{}", if *dirty { " •" } else { "" });
-                            if ui_kit::list_picker(ui, &format!("document:{i}"), &label, i == app.docs.active).clicked() {
+                            let row = ui_kit::list_picker(ui, &format!("document:{i}"), &label, i == app.docs.active).on_hover_text(place);
+                            if row.clicked() {
                                 pick = Some(i);
                             }
                         }
                     })
                 });
             let pressed_outside = ui.ctx().input(|i| i.pointer.any_pressed()) && !resp.response.contains_pointer() && !mresp.contains_pointer();
-            if pick.is_some() || pressed_outside {
+            if pick.is_some() || pressed_outside || ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 ui.ctx().data_mut(|d| d.insert_temp(id, false));
             }
         }
-        x += 26.0;
+        x += LIST_BUTTON;
     }
     // The tab's menu: close it, the others, or all of them.
     let mut many: Option<Vec<usize>> = None;
@@ -968,6 +984,41 @@ pub fn drop_slot(left: f32, x0: f32, widths: &[f32], first: usize, from: usize) 
     first + best.0
 }
 
+/// The names the tabs show: the design's name, and where two open designs share a name, the
+/// folder each is saved in, or (unsaved, or saved in folders of the same name) its number among
+/// them, so they can be told apart.
+fn display_names(app: &SolveApp, info: &[(String, bool)], paths: &[Option<String>]) -> Vec<String> {
+    let locale = crate::i18n::Locale::for_language(&app.preferences.language);
+    let names: Vec<String> = info.iter().map(|(name, _)| locale.given_name(name).to_string()).collect();
+    let folder = |i: usize| {
+        paths
+            .get(i)
+            .cloned()
+            .flatten()
+            .and_then(|p| std::path::Path::new(&p).parent().and_then(|f| f.file_name()).map(|f| f.to_string_lossy().into_owned()))
+    };
+    names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| {
+            let same: Vec<usize> = names.iter().enumerate().filter(|(_, other)| *other == name).map(|(k, _)| k).collect();
+            if same.len() < 2 {
+                return name.clone();
+            }
+            match folder(i) {
+                Some(f) if same.iter().filter(|k| folder(**k).as_deref() == Some(f.as_str())).count() == 1 => format!("{name} — {f}"),
+                _ => format!("{name} ({})", same.iter().position(|k| *k == i).unwrap_or(0) + 1),
+            }
+        })
+        .collect()
+}
+
+/// A small downward caret drawn as a shape (no font glyph).
+fn dropdown_caret(painter: &egui::Painter, at: egui::Pos2, color: egui::Color32) {
+    let points = vec![at + egui::vec2(-3.5, -2.0), at + egui::vec2(3.5, -2.0), at + egui::vec2(0.0, 2.0)];
+    painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+}
+
 /// Tabs are rounded chips on the bar; the active design has the stronger fill.
 fn tab_shape(painter: &egui::Painter, t: &Tokens, r: Rect, active: bool, hovered: bool) {
     let fill = if active {
@@ -980,18 +1031,27 @@ fn tab_shape(painter: &egui::Painter, t: &Tokens, r: Rect, active: bool, hovered
     painter.rect_filled(r, t.radius_md, fill);
 }
 
+/// Tabs never get narrower than this: past it the strip scrolls to keep the active one and the
+/// rest are in the Open documents list.
+const MIN_TAB: f32 = 120.0;
+/// The Open documents list button (its count and arrow).
+const LIST_BUTTON: f32 = 40.0;
+
 /// Which tabs the strip shows in `room` points: (first, how many, tab width). Tabs shrink to
 /// `MIN_TAB`; past that a window of tabs around the active one is shown and the rest go in the »
 /// list.
 pub fn layout(n: usize, active: usize, room: f32) -> (usize, usize, f32) {
-    const MIN_TAB: f32 = 90.0;
     let n = n.max(1);
-    let avail = (room - 34.0).max(MIN_TAB);
-    if avail / n as f32 >= MIN_TAB {
-        return (0, n, (avail / n as f32).min(220.0));
+    // Room for + and, with more than one design, the Open documents list.
+    let avail = room - 34.0 - if n > 1 { LIST_BUTTON } else { 0.0 };
+    // A narrow title bar: one shorter tab, so + and the list button stay inside the strip.
+    if avail < MIN_TAB {
+        return (active.min(n - 1), 1, avail.max(56.0));
     }
-    // Leave room for the » button.
-    let fit = (((avail - 26.0) / MIN_TAB).floor() as usize).max(1);
+    if avail / n as f32 >= MIN_TAB {
+        return (0, n, (avail / n as f32).min(240.0));
+    }
+    let fit = ((avail / MIN_TAB).floor() as usize).max(1);
     let first = active.saturating_sub(fit - 1).min(n - fit);
     (first, fit, MIN_TAB)
 }
@@ -1252,12 +1312,16 @@ mod tests {
     /// unsaved changes; the last tab closing leaves a blank design.
     #[test]
     fn the_tab_strip_overflows_into_a_list_keeping_the_active_tab() {
-        assert_eq!(layout(2, 0, 800.0), (0, 2, 220.0));
+        assert_eq!(layout(2, 0, 800.0), (0, 2, 240.0));
         let (first, shown, w) = layout(12, 11, 600.0);
-        assert!(shown < 12 && w == 90.0);
+        assert!(shown < 12 && w == MIN_TAB);
         assert!((first..first + shown).contains(&11), "the active tab stays visible");
-        assert!(shown as f32 * w + 26.0 + 34.0 <= 600.0 + 0.5);
+        assert!(shown as f32 * w + LIST_BUTTON + 34.0 <= 600.0 + 0.5);
         assert_eq!(layout(12, 0, 600.0).0, 0);
+        // A narrow title bar keeps + and the list button inside the strip.
+        let (first, shown, w) = layout(12, 5, 150.0);
+        assert_eq!((first, shown), (5, 1));
+        assert!(w + LIST_BUTTON + 34.0 <= 150.0 + 0.5);
     }
 
     /// Active and hovered document tabs keep the bar's light text readable in both themes.

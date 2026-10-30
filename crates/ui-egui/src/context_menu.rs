@@ -1513,9 +1513,14 @@ pub fn run_item(app: &mut SolveApp, item: &Item, at: Pos2) {
             let _ = app.run("browser.visibility", json!({"visible": true, "paths": [p["path"]], "isolate": true}));
         }
         "ui.canvasVisible" => drop(app.run("canvas.edit", p)),
-        "ui.toolbarPin" | "ui.toolbarRemove" | "ui.toolbarReset" | "ui.toolbarCustomize" | "ui.shortcutPin" => {
-            crate::toolbar_custom::run(app, &item.id, &p)
-        }
+        "ui.toolbarPin"
+        | "ui.toolbarRemove"
+        | "ui.toolbarReset"
+        | "ui.toolbarCustomize"
+        | "ui.shortcutPin"
+        | "ui.recommendHide"
+        | "ui.recommendFreeze"
+        | "ui.recommendOff" => crate::toolbar_custom::run(app, &item.id, &p),
         "ui.historyPlayButton" => {
             if let Err(e) = crate::prefs::set(app, &json!({ "history_play_button": p["show"] })) {
                 app.set_status(e, true);

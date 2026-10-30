@@ -474,6 +474,18 @@ fn window_page<const INDEX: usize>(ui: &mut egui::Ui, app: &mut SolveApp) {
 }
 
 pub const THEMES: &[(&str, &str)] = &[("dark", "Dark"), ("light", "Light"), ("system", "System")];
+/// The theme files Follow System uses for a dark and a light system.
+pub const SYSTEM_DARK: &str = "nuclear-graphite";
+pub const SYSTEM_LIGHT: &str = "nuclear-light";
+
+/// The Dark/Light flag set by a script (`ui.set {"dark": …}`): a Nuclear theme of the other
+/// side gives way to its partner, as the built-in Dark and Light did before the Nuclear themes.
+pub fn match_dark(app: &mut SolveApp, dark: bool) {
+    let theme = app.preferences.theme.as_str();
+    if theme.starts_with("nuclear-") && (theme != SYSTEM_LIGHT) != dark {
+        app.preferences.theme = if dark { SYSTEM_DARK } else { SYSTEM_LIGHT }.into();
+    }
+}
 pub const MSAA: [u32; 4] = [1, 2, 4, 8];
 /// Supersampling factors (#1288): off, 1.5× and 2× the viewport's pixels each way.
 pub const SUPERSAMPLING: [f32; 3] = [1.0, 1.5, 2.0];
@@ -956,7 +968,32 @@ preference_settings! {
     max_design_file_mb: u64 = DEFAULT_DESIGN_MB, PAGE_GENERAL;
     /// `dark`, `light` or `system` (follow the operating system), or a theme file's id: a
     /// built-in one (`gruvbox-dark`, …) or one of `custom_themes` (#2255).
-    theme: String = "dark".into(), PAGE_INTERFACE;
+    theme: String = "nuclear-graphite".into(), PAGE_INTERFACE;
+    /// Missing (read as 0) in preferences saved before the Nuclear themes, whose `dark` and
+    /// `light` were the default look; [`lenient`] moves those to Nuclear Graphite and Nuclear
+    /// Light once, and saving writes 1, so a later choice of the old Dark or Light stays.
+    nuclear_appearance: u32 = 1;
+    /// Ribbon density: comfortable (larger icons and targets, the default) or compact.
+    toolbar_density: crate::toolbar::Density = crate::toolbar::Density::Comfortable, PAGE_INTERFACE;
+    /// The 3D view's background, apart from the theme: the theme's own, a studio gradient, or a
+    /// solid graphite, black, light grey or custom colour.
+    viewport_background: crate::theme::ViewportBackground = crate::theme::ViewportBackground::Theme, PAGE_INTERFACE;
+    /// The custom background colour, `#rrggbb`.
+    viewport_custom: String = "#8a9099".into(), PAGE_INTERFACE;
+    /// Recommended tools in the ribbon, learned from this computer's own use (`recommend`).
+    adaptive_tools: bool = true, PAGE_INTERFACE => check_id("prefs.adaptive_tools");
+    /// Keep the recommendations shown now; learning continues but nothing moves.
+    adaptive_frozen: bool = false, PAGE_INTERFACE => check_id("prefs.adaptive_frozen");
+    /// Recommendations the user hid, as `<tab>/<command id>`.
+    adaptive_hidden: Vec<String> = Vec::new();
+    /// The recommendations applied at the last idle boundary, per tab (kept so a restart or a
+    /// freeze shows the same ones).
+    adaptive_shown: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    /// Per-command use counts and scores, per tab. Only command ids and numbers: nothing about
+    /// the design, files or values. Never sent anywhere.
+    tool_usage: std::collections::BTreeMap<String, crate::recommend::Usage> = Default::default();
+    /// Launches seen by the recommendations (their observation period and score decay).
+    usage_sessions: u32 = 0;
     /// The 3D view's colours: the theme's own, or the Light or Dark theme's whatever the window
     /// uses (#4146).
     viewport_theme: crate::theme::ViewportTheme = crate::theme::ViewportTheme::Theme, PAGE_INTERFACE;
@@ -1396,8 +1433,10 @@ impl Snapshot {
         let units_changed = app.preferences.default_units != self.prefs.default_units;
         // Update bookkeeping isn't a setting: a check that finished while the dialog was open stays.
         let update = std::mem::take(&mut app.preferences.update);
+        let learned = app.preferences.clone();
         app.preferences = self.prefs;
         app.preferences.update = update;
+        keep_learned(&learned, &mut app.preferences);
         if units_changed {
             default_units_changed(app);
         }
@@ -1464,7 +1503,17 @@ fn apply_pending(app: &mut SolveApp) -> bool {
     };
     // Update bookkeeping isn't a setting and Cancel keeps it (`restore`), so it isn't a change.
     snapshot.prefs.update.clone_from(&app.preferences.update);
+    keep_learned(&app.preferences, &mut snapshot.prefs);
     app.prefs_window.snapshot.as_ref().is_some_and(|s| !s.matches(app))
+}
+
+/// The recommended tools' bookkeeping (counts, launches, shown and hidden ones) isn't a setting:
+/// use while the dialog is open, Reset learned usage and Hide stay, and none of it enables Apply.
+fn keep_learned(from: &Prefs, to: &mut Prefs) {
+    to.tool_usage.clone_from(&from.tool_usage);
+    to.usage_sessions = from.usage_sessions;
+    to.adaptive_shown.clone_from(&from.adaptive_shown);
+    to.adaptive_hidden.clone_from(&from.adaptive_hidden);
 }
 
 /// The colour theme (#2255): Dark, Light, System, the built-in theme files and the imported
@@ -1474,11 +1523,15 @@ fn theme_row(app: &mut SolveApp, ui: &mut egui::Ui) {
     let mut choices = theme_choices(app);
     // While a file is followed (#7573) it is the theme, so no tile shows as chosen.
     let following = !app.prefs_window.follow.path(&app.preferences.theme_follow).is_empty();
+    // Nuclear's own themes and Follow System first, then the classic Light and Dark.
     choices.sort_by_key(|(id, _)| match id.as_str() {
-        "light" => 0,
-        "dark" => 1,
-        "system" => 2,
-        _ => 3,
+        "nuclear-graphite" => 0,
+        "nuclear-carbon" => 1,
+        "nuclear-light" => 2,
+        "system" => 3,
+        "light" => 4,
+        "dark" => 5,
+        _ => 6,
     });
     let mut tile_action: Option<(&str, String)> = None;
     let mut action_theme: Option<String> = None;
@@ -1490,8 +1543,9 @@ fn theme_row(app: &mut SolveApp, ui: &mut egui::Ui) {
         |ui| {
             for (id, label) in &choices {
                 let palette = match id.as_str() {
-                    "light" | "system" => Tokens::light(),
+                    "light" => Tokens::light(),
                     "dark" => Tokens::dark(),
+                    "system" => crate::theme_files::find(SYSTEM_DARK, &[]).map(crate::theme_files::resolve).unwrap_or_else(Tokens::dark),
                     _ => crate::theme_files::find(id, &app.preferences.custom_themes).map(crate::theme_files::resolve).unwrap_or_else(Tokens::dark),
                 };
                 let custom = app.preferences.custom_themes.iter().any(|t| t.id == *id);
@@ -1744,7 +1798,10 @@ pub fn apply(app: &mut SolveApp, ctx: &egui::Context) {
     // A theme file's palette, in place of its base's (dark or light); the visuals follow. A
     // followed file (#7573) wins while it is followed and has read completely once.
     follow_theme_file(app, ctx);
-    let file = app.prefs_window.follow.theme().or_else(|| crate::theme_files::find(&app.preferences.theme, &app.preferences.custom_themes));
+    // Follow System keeps Nuclear's accent: Nuclear Graphite or Nuclear Light.
+    let system = if app.ui.dark { SYSTEM_DARK } else { SYSTEM_LIGHT };
+    let id = if app.preferences.theme == "system" { system } else { app.preferences.theme.as_str() };
+    let file = app.prefs_window.follow.theme().or_else(|| crate::theme_files::find(id, &app.preferences.custom_themes));
     if let Some(f) = file {
         app.ui.dark = f.base.is_dark();
     }
@@ -3072,6 +3129,21 @@ fn limit_disabled_plugins(mut p: Prefs) -> Prefs {
 /// understand (a setting a newer or older release saved differently, a hand edit) falls back to
 /// its default on its own instead of discarding all of them.
 pub fn lenient(saved: &serde_json::Value) -> Prefs {
+    let mut p = lenient_inner(saved);
+    // Saved before the Nuclear themes: the old default looks become the Nuclear ones, once (an
+    // explicit later choice of Dark or Light stays, as the field is saved from then on).
+    if saved.as_object().is_some_and(|o| !o.contains_key("nuclear_appearance")) {
+        match p.theme.as_str() {
+            "dark" => p.theme = "nuclear-graphite".into(),
+            "light" => p.theme = "nuclear-light".into(),
+            _ => {}
+        }
+    }
+    p.nuclear_appearance = 1;
+    p
+}
+
+fn lenient_inner(saved: &serde_json::Value) -> Prefs {
     if let Ok(p) = serde_json::from_value::<Prefs>(saved.clone()) {
         return limit_disabled_plugins(migrate(p));
     }
@@ -3111,6 +3183,21 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
         && v.as_str().and_then(crate::theme::ViewportTheme::from_id).is_none()
     {
         return Err("`viewport_theme` must be theme, light or dark".into());
+    }
+    if let Some(v) = p.get("toolbar_density")
+        && v.as_str().and_then(crate::toolbar::Density::from_id).is_none()
+    {
+        return Err("`toolbar_density` must be comfortable or compact".into());
+    }
+    if let Some(v) = p.get("viewport_background")
+        && v.as_str().and_then(crate::theme::ViewportBackground::from_id).is_none()
+    {
+        return Err("`viewport_background` must be theme, studio, graphite, black, light_gray or custom".into());
+    }
+    if let Some(v) = p.get("viewport_custom")
+        && v.as_str().and_then(crate::theme::parse_hex).is_none()
+    {
+        return Err("`viewport_custom` must be a colour as #rrggbb".into());
     }
     if let Some(value) = p.get("navigation_bar") {
         crate::navigation_bar::validate(value)?;
@@ -3218,7 +3305,7 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
 
 #[cfg(test)]
 pub(crate) fn reveal_preference(h: &mut crate::scenario::Harness, handle: &str) {
-    for _ in 0..16 {
+    for _ in 0..32 {
         let page = crate::scenario::rect_of("dialog:page_body").expect("preference body");
         let visible = crate::scenario::rect_of(handle)
             .map(|r| page.contains_rect(r))
@@ -4793,7 +4880,7 @@ mod tests {
             let before = h.app.preferences.clone();
             assert!(set(&mut h.app, &json!({"browser_bodies_folders": bad})).is_err(), "{bad}");
             assert_eq!(h.app.preferences, before, "{bad}: a refused value changes nothing");
-            let saved = lenient(&json!({"browser_bodies_folders": bad, "theme": "light"}));
+            let saved = lenient(&json!({"browser_bodies_folders": bad, "theme": "light", "nuclear_appearance": 1}));
             assert_eq!((saved.browser_bodies_folders, saved.theme.as_str()), (BodiesFolders::Several, "light"), "{bad}");
         }
         h.call("ui.prefs", json!({"open": "Interface"}));
@@ -5099,9 +5186,9 @@ mod tests {
         use solidcraft_engine::io::vfs;
         let mut h = crate::scenario::Harness::new();
         h.app.home.open = false;
-        h.call("ui.prefs", json!({"theme": "dark", "open": "Interface"}));
+        h.call("ui.prefs", json!({"theme": "nuclear-graphite", "open": "Interface"}));
         h.frames(2);
-        super::reveal_preference(&mut h, "prefs:theme_tile:dark");
+        super::reveal_preference(&mut h, "prefs:theme_tile:nuclear-graphite");
         let (root, out) = (h.dir.join("root"), h.dir.join("out"));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(&out).unwrap();
@@ -5110,7 +5197,7 @@ mod tests {
             h.app.services.pick_save = Some(Box::new(move |_, _| Box::pin(std::future::ready(Some(answer.clone())))));
             h.app.status = None;
             vfs::scoped(Some(vfs::PathScope::new([root.clone()])), || {
-                h.step(&json!({"click":{"handle":"prefs:theme_tile:dark"},"button":"right"})).unwrap();
+                h.step(&json!({"click":{"handle":"prefs:theme_tile:nuclear-graphite"},"button":"right"})).unwrap();
                 h.step(&json!({"click":{"handle":"menu:theme_export"}})).unwrap();
                 h.frames(4);
             });
@@ -5118,7 +5205,7 @@ mod tests {
             if inside {
                 assert_eq!(status, None);
                 let file: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-                assert_eq!(file, super::theme_file(&h.app, "dark", true));
+                assert_eq!(file, super::theme_file(&h.app, "nuclear-graphite", true));
             } else {
                 assert!(status.as_deref().is_some_and(|s| s.contains("outside the folders this agent may use")), "{status:?}");
                 assert!(!path.exists(), "nothing written outside");
@@ -5779,12 +5866,25 @@ mod tests {
         assert!(h.app.preferences.radial_context_menu, "Cancel restores the last Apply");
     }
 
+    /// Preferences saved before the Nuclear themes move from the old default Dark and Light to
+    /// Nuclear Graphite and Nuclear Light once; a later explicit choice of Dark stays.
+    #[test]
+    fn old_default_themes_move_to_the_nuclear_ones_once() {
+        assert_eq!(lenient(&json!({"theme": "dark"})).theme, "nuclear-graphite");
+        assert_eq!(lenient(&json!({"theme": "light"})).theme, "nuclear-light");
+        assert_eq!(lenient(&json!({"theme": "gruvbox-dark"})).theme, "gruvbox-dark");
+        let chosen = serde_json::to_value(lenient(&json!({"theme": "dark", "nuclear_appearance": 1}))).unwrap();
+        assert_eq!(chosen["theme"], "dark");
+        assert_eq!(lenient(&chosen).theme, "dark", "a choice saved by this version stays");
+        assert_eq!(Prefs::default().theme, "nuclear-graphite");
+    }
+
     #[test]
     fn cosmetic_threads_default_off_and_follow_preferences_transactions() {
         assert!(!Prefs::default().cosmetic_threads);
         let old: Prefs = serde_json::from_value(json!({"theme":"light","msaa":4})).unwrap();
         assert!(!old.cosmetic_threads && old.theme == "light" && old.msaa == 4);
-        let malformed = lenient(&json!({"cosmetic_threads":"yes","theme":"light"}));
+        let malformed = lenient(&json!({"cosmetic_threads":"yes","theme":"light","nuclear_appearance":1}));
         assert!(!malformed.cosmetic_threads && malformed.theme == "light");
         let mut h = crate::scenario::Harness::new();
         let design = h.app.session.doc.to_json();
@@ -6085,7 +6185,7 @@ mod tests {
         app.keymap.custom.insert("solid.extrude".into(), "Shift+E".into());
         let v = control(&mut app, &json!({"button": "cancel"})).unwrap();
         assert_eq!(v["dialog"], serde_json::Value::Null);
-        assert!(app.ui.dark && app.preferences.theme == "dark" && app.preferences.ui_scale == 1.0 && app.preferences.zoom_to_cursor);
+        assert!(app.ui.dark && app.preferences.theme == "nuclear-graphite" && app.preferences.ui_scale == 1.0 && app.preferences.zoom_to_cursor);
         assert!(app.keymap.custom.is_empty(), "a rebinding made while the dialog was open is undone too");
 
         control(&mut app, &json!({"open": "Navigation", "nav": "alias", "look_at_anim": false})).unwrap();

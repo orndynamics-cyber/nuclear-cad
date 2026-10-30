@@ -339,7 +339,7 @@ pub(crate) fn option_card(ui: &mut Ui, label: &str, note: Option<&str>, selected
     let t = Tokens::get();
     let theme = matches!(figure, PreferenceFigure::Theme { .. });
     let width = match figure {
-        PreferenceFigure::Theme { .. } => t.form_label_width + t.space_24 + t.space_6,
+        PreferenceFigure::Theme { .. } => t.form_label_width + t.space_24 + t.space_16,
         PreferenceFigure::Antialiasing(_) => t.space_24 * 3.0 + t.space_16,
         _ => t.form_label_width + t.space_24 * 2.0 + t.space_6,
     };
