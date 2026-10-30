@@ -339,7 +339,7 @@ pub fn canonical_revolve_axis(plane: &Plane, region: &Region2, axis_origin: Vec2
 /// Revolve each region about the sketch axis by `angle` radians.
 /// This legacy API preserves its historical sweep sign behavior.
 pub fn revolve(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: Vec2, angle: f64) -> Result<Vec<Body>> {
-    revolved(plane, regions, axis_origin, axis_dir, angle, false)
+    revolved(plane, regions, axis_origin, axis_dir, angle, false, &[])
 }
 
 /// [`revolve`] for bodies that are final (new bodies, not a boolean's tools): a partial turn's
@@ -347,10 +347,17 @@ pub fn revolve(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: 
 /// healed, its planar faces meet a target exactly where they are tangent to it, and the
 /// boolean leaves pieces there that touch. The boolean heals its own result anyway.
 pub fn revolve_whole(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: Vec2, angle: f64) -> Result<Vec<Body>> {
-    revolved(plane, regions, axis_origin, axis_dir, angle, true)
+    revolved(plane, regions, axis_origin, axis_dir, angle, true, &[])
 }
 
-fn revolved(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: Vec2, angle: f64, whole: bool) -> Result<Vec<Body>> {
+/// [`revolve_whole`] with the profile segments that meet at any of `joins` swept as one curve
+/// (one face round), where a full turn with one edge on the axis is built: a wall the caller
+/// holds as several Bézier pieces stays one face.
+pub(crate) fn revolve_whole_joined(plane: &Plane, region: &Region2, axis_origin: Vec2, axis_dir: Vec2, joins: &[Vec2]) -> Result<Vec<Body>> {
+    revolved(plane, std::slice::from_ref(region), axis_origin, axis_dir, std::f64::consts::TAU, true, joins)
+}
+
+fn revolved(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: Vec2, angle: f64, whole: bool, joins: &[Vec2]) -> Result<Vec<Body>> {
     let angle = finite(angle, "angle")?;
     if angle.abs() < 1e-6 {
         return Err(KernelError::Invalid("revolve angle is zero".into()));
@@ -436,7 +443,7 @@ fn revolved(plane: &Plane, regions: &[Region2], axis_origin: Vec2, axis_dir: Vec
         let r = &given.region();
         if angle.abs() >= std::f64::consts::TAU - 1e-9
             && r.holes.is_empty()
-            && let Some(b) = full_turn_on_axis(plane, &given.outer, axis_origin, d, angle)?
+            && let Some(b) = full_turn_on_axis(plane, &given.outer, axis_origin, d, angle, joins)?
         {
             out.push(b);
             continue;
@@ -1378,7 +1385,7 @@ fn half_disc(lp: &Loop2, axis_origin: Vec2, d: Vec2) -> Option<(Vec2, f64)> {
 
 /// A full turn of a loop with edges on the axis, built without the zero-area faces truck sweeps
 /// from them (booleans can't handle those). `None` when no builder here takes the loop.
-fn full_turn_on_axis(plane: &Plane, nl: &NumberedLoop, axis_origin: Vec2, d: Vec2, angle: f64) -> Result<Option<Body>> {
+fn full_turn_on_axis(plane: &Plane, nl: &NumberedLoop, axis_origin: Vec2, d: Vec2, angle: f64, joins: &[Vec2]) -> Result<Option<Body>> {
     let lp = &nl.lp;
     // A half disc on the axis revolved fully is a sphere: build it without poles. Every
     // patch is swept from the half disc's arcs.
@@ -1398,7 +1405,7 @@ fn full_turn_on_axis(plane: &Plane, nl: &NumberedLoop, axis_origin: Vec2, d: Vec
     }
     // A full revolution of a profile with one edge on the axis: sweep the rest of the loop
     // as a cone-like shell (no zero-area faces, which booleans can't handle).
-    if let Some(b) = revolve_touching_axis(plane, nl, axis_origin, d)? {
+    if let Some(b) = revolve_touching_axis(plane, nl, axis_origin, d, joins)? {
         return Ok(Some(b));
     }
     // Several edges on the axis (a spherical shell's two radial lines): each run of the loop
@@ -1418,7 +1425,7 @@ fn full_turn_on_axis(plane: &Plane, nl: &NumberedLoop, axis_origin: Vec2, d: Vec
         segs.push(Seg2::Line { a: last.end(), b: first.start() });
         let sub = NumberedLoop { lp: Loop2 { segs }, from: run.iter().map(|j| nl.numbers(*j).to_vec()).chain([Vec::new()]).collect() };
         let void = sub.lp.is_ccw() != lp.is_ccw();
-        let Some(b) = full_turn_on_axis(plane, &if void { sub.reversed() } else { sub }, axis_origin, d, angle)? else { return Ok(None) };
+        let Some(b) = full_turn_on_axis(plane, &if void { sub.reversed() } else { sub }, axis_origin, d, angle, joins)? else { return Ok(None) };
         parts.push((b, void));
     }
     let faces: Option<Vec<FaceProv>> =
@@ -1664,7 +1671,7 @@ fn revolve_on_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Vec2, d:
     })
 }
 
-fn revolve_touching_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Vec2, d: Vec2) -> Result<Option<Body>> {
+fn revolve_touching_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Vec2, d: Vec2, joins: &[Vec2]) -> Result<Option<Body>> {
     let lp = &numbered.lp;
     let on_axis = |p: Vec2| d.cross(p - axis_origin).abs() < 1e-9;
     let n = lp.segs.len();
@@ -1732,8 +1739,36 @@ fn revolve_touching_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Ve
                 },
             });
         }
+        // Pieces meeting at a join: one edge (one face round), under all their segments.
+        let mut srcs: Vec<Vec<usize>> = mid_src.iter().map(|s| s.to_vec()).collect();
+        let mut verts = verts;
+        if !joins.is_empty() {
+            let joined_at = |i: usize| mid.get(i).is_some_and(|s| joins.iter().any(|j| j.dist(s.end()) < 1e-9)) && i + 1 < mid.len();
+            let (mut v2, mut e2, mut s2) = (Vec::new(), Vec::new(), Vec::new());
+            let mut i = 0;
+            while i < edges.len() {
+                let mut j = i;
+                while joined_at(j) {
+                    j += 1;
+                }
+                let (Some(a), Some(b)) = (verts.get(i), verts.get(j + 1)) else { break };
+                v2.push(a.clone());
+                let group = edges.get(i..=j).unwrap_or(&[]);
+                let edge = match (group, joined_curve(group)) {
+                    ([one], _) => one.clone(),
+                    (_, Some(curve)) => mt::Edge::new(a, b, curve),
+                    _ => return Err(KernelError::Failed("revolve: pieces of a curve that don't join".into())),
+                };
+                e2.push(edge);
+                s2.push(srcs.get(i..=j).unwrap_or(&[]).concat());
+                i = j + 1;
+            }
+            v2.extend(verts.last().cloned());
+            (verts, edges, srcs) = (v2, e2, s2);
+        }
+        let edge_count = edges.len();
         // Each edge with the profile segments under it, before the wire may be turned round.
-        let seeds: Vec<(mt::EdgeID, Vec<usize>)> = edges.iter().map(|e| e.id()).zip(mid_src.iter().map(|s| s.to_vec())).collect();
+        let seeds: Vec<(mt::EdgeID, Vec<usize>)> = edges.iter().map(|e| e.id()).zip(srcs).collect();
         let mut w: mt::Wire = edges.into();
         let axis = plane.dir_to_world(d);
         let mut shell = if apex_start || apex_end {
@@ -1751,7 +1786,7 @@ fn revolve_touching_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Ve
         // the profile vertex on its rim.
         let fixed: Vec<mt::VertexID> =
             [(apex_start, verts.first()), (apex_end, verts.last())].into_iter().filter_map(|(apex, v)| v.filter(|_| apex).map(|v| v.id())).collect();
-        let mut history: Option<Vec<FaceProv>> = (seeds.len() == mid.len())
+        let mut history: Option<Vec<FaceProv>> = (seeds.len() == edge_count)
             .then(|| record::columns(shell.face_iter(), &seeds, None, record::Column::ToEnd, &fixed))
             .flatten()
             .and_then(|sides| sides.into_iter().collect());
@@ -1784,6 +1819,42 @@ fn revolve_touching_axis(plane: &Plane, numbered: &NumberedLoop, axis_origin: Ve
         let solid = if shift.len() > 0.0 { builder::translated(&solid, v3(shift)) } else { solid };
         record::attach(Body::new(solid)?, &[], history, Default::default()).map(Some)
     })
+}
+
+/// One curve through `edges` end to end (each oriented as the edge runs): a B-spline when all are
+/// polynomial, else a NURBS curve; `None` when one is neither or they don't meet.
+fn joined_curve(edges: &[mt::Edge]) -> Option<mt::Curve> {
+    use mt::Concat;
+    let polynomial = |c: &mt::Curve| match c {
+        mt::Curve::Line(l) => Some(mt::BSplineCurve::new(mt::KnotVec::bezier_knot(1), vec![l.0, l.1])),
+        mt::Curve::BSplineCurve(b) => Some(b.clone()),
+        _ => None,
+    };
+    let curves: Vec<mt::Curve> = edges.iter().map(|e| e.oriented_curve()).collect();
+    if let Some(pieces) = curves.iter().map(polynomial).collect::<Option<Vec<_>>>() {
+        let mut out: Option<mt::BSplineCurve<mt::Point3>> = None;
+        for (i, mut c) in pieces.into_iter().enumerate() {
+            c.knot_normalize().knot_translate(i as f64);
+            out = Some(match out {
+                None => c,
+                Some(o) => o.try_concat(&c).ok()?,
+            });
+        }
+        return out.map(mt::Curve::BSplineCurve);
+    }
+    let mut out: Option<mt::NurbsCurve<mt::Vector4>> = None;
+    for (i, c) in curves.iter().enumerate() {
+        let mut c: mt::NurbsCurve<mt::Vector4> = match c {
+            mt::Curve::NurbsCurve(n) => n.clone(),
+            other => polynomial(other)?.into(),
+        };
+        c.knot_normalize().knot_translate(i as f64);
+        out = Some(match out {
+            None => c,
+            Some(o) => o.try_concat(&c).ok()?,
+        });
+    }
+    out.map(mt::Curve::NurbsCurve)
 }
 
 /// Close a ruled shell (side faces between matching wires, with their provenance as built)
