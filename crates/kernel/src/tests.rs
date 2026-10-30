@@ -3300,6 +3300,20 @@ fn shell_of_a_body_of_revolution_keeps_one_inner_face_per_wall() {
         Seg2::Arc { center: c1, radius: r1, start: a0, sweep: 60f64.to_radians() - a0 },
         Seg2::Arc { center: c2, radius: 10.0, start: b0, sweep: (b1 - b0 + 2.0 * PI) % (2.0 * PI) - 2.0 * PI },
     ]);
+    let mut p = [Vec2::ZERO; solidcraft_geom::MAX_BEZIER_CTRL];
+    for (k, q) in p.iter_mut().enumerate().take(10) {
+        let x = if k == 0 {
+            20.0
+        } else if k == 9 {
+            18.0
+        } else if k % 2 == 1 {
+            27.0
+        } else {
+            17.0
+        };
+        *q = Vec2::new(x, 70.0 * k as f64 / 9.0);
+    }
+    let wavy = Seg2::Bezier { n: 9, p };
     // (name, body, top, walls): a wall's outside and inside are three faces each, the rim three
     // and the two floors one each.
     let fixtures = [
@@ -3307,6 +3321,8 @@ fn shell_of_a_body_of_revolution_keeps_one_inner_face_per_wall() {
         ("frustum", revolve(vec![line((20.0, 0.0), (12.0, 40.0))]), 40.0, 1),
         ("spline vase", spline, 70.0, 1),
         ("arc vase", arcs, 70.0, 2),
+        // Too wavy for one Bézier inside: its pieces are swept as one curve.
+        ("wavy wall", revolve(vec![wavy]), 70.0, 1),
         ("sharp transition", revolve(vec![line((20.0, 0.0), (26.0, 30.0)), line((26.0, 30.0), (15.0, 60.0))]), 60.0, 2),
     ];
     for (name, body, top, walls) in fixtures {
