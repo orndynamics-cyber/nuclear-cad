@@ -1039,6 +1039,19 @@ fn drag_arrow(
         }
         *value = format_len(doc, v);
         ts = tip(v)?;
+    } else if r.hovered() {
+        // Under the pointer, the arrow keys step it from where it is (`manipulator_step`).
+        crate::manipulator_step::note_arrow_hovered();
+        let steps = crate::manipulator_step::arrow_key_steps(ui.ctx());
+        if steps != 0 {
+            let step = crate::manipulator_step::linear(proj, base);
+            let mut v = crate::manipulator_step::nudge(l, steps, step);
+            if !signed && v <= 0.0 {
+                v = step;
+            }
+            *value = format_len(doc, v);
+            ts = tip(v)?;
+        }
     }
     // Paint the value just read from this frame's pointer, including the value box anchor.
     // Using the old distance here made both trail the drag by another frame.

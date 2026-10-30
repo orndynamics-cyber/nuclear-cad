@@ -6,7 +6,7 @@
     "ui.step_custom": "Custom",
     "ui.step_heading_angle": "Angle step",
     "ui.step_heading_length": "Length step",
-    "ui.step_tip": "The step dragged arrows move in. Automatic follows the zoom and the size of the part; a fixed step stays the same whatever the view. Hold Alt or Ctrl while dragging for a free drag.",
+    "ui.step_tip": "The step dragged arrows move in. Automatic follows the zoom and the size of the part; a fixed step stays the same whatever the view. Hold Alt or Ctrl while dragging for a free drag. With the pointer on an arrow, the arrow keys move it one step (Shift: ten). Custom takes a unit: 0.05 in, 2.5 deg.",
     "ui.step_zoom": "Zoom",
     "ui.step_zoom_long": "Zoom only"
   },
@@ -17,7 +17,7 @@
     "ui.step_custom": "Personalizado",
     "ui.step_heading_angle": "Passo angular",
     "ui.step_heading_length": "Passo linear",
-    "ui.step_tip": "O passo em que as setas arrastadas se movem. Automático segue o zoom e o tamanho da peça; um passo fixo continua o mesmo em qualquer vista. Segure Alt ou Ctrl ao arrastar para um movimento livre.",
+    "ui.step_tip": "O passo em que as setas arrastadas se movem. Automático segue o zoom e o tamanho da peça; um passo fixo continua o mesmo em qualquer vista. Segure Alt ou Ctrl ao arrastar para um movimento livre. Com o ponteiro sobre uma seta, as teclas de seta a movem um passo (Shift: dez). Personalizado aceita unidade: 0.05 in, 2.5 deg.",
     "ui.step_zoom": "Zoom",
     "ui.step_zoom_long": "Somente zoom"
   },
@@ -28,7 +28,7 @@
     "ui.step_custom": "Свой",
     "ui.step_heading_angle": "Шаг угла",
     "ui.step_heading_length": "Шаг длины",
-    "ui.step_tip": "Шаг, с которым движутся перетаскиваемые стрелки. Автоматический шаг зависит от масштаба и размера детали; фиксированный шаг не меняется при любом виде. Удерживайте Alt или Ctrl при перетаскивании для свободного движения.",
+    "ui.step_tip": "Шаг, с которым движутся перетаскиваемые стрелки. Автоматический шаг зависит от масштаба и размера детали; фиксированный шаг не меняется при любом виде. Удерживайте Alt или Ctrl при перетаскивании для свободного движения. Когда указатель на стрелке, клавиши со стрелками двигают её на один шаг (Shift: на десять). В поле «Свой» можно указать единицы: 0.05 in, 2.5 deg.",
     "ui.step_zoom": "Масштаб",
     "ui.step_zoom_long": "Только масштаб"
   },

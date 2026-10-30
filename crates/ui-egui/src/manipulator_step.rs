@@ -50,10 +50,15 @@ impl Default for Frame {
     }
 }
 
+/// Whether a dialog arrow was under the pointer (this frame, the frame before): the arrow keys
+/// then step it instead of turning the view.
+type ArrowHover = (bool, bool);
+
 type SizeCache = Option<(usize, Vec<Sel>, f64)>;
 
 thread_local! {
     static FRAME: Cell<Frame> = Cell::new(Frame::default());
+    static ARROW_HOVER: Cell<ArrowHover> = const { Cell::new((false, false)) };
     /// The part size for a world state and selection, so a frame with a dialog open does not
     /// walk the selection again.
     static SIZE: RefCell<SizeCache> = const { RefCell::new(None) };
@@ -79,6 +84,61 @@ pub fn set_frame(app: &SolveApp) {
     let mode = app.preferences.manipulator_step;
     let size = if mode == StepMode::Automatic { part_size(app) } else { 0.0 };
     FRAME.with(|f| f.set(Frame { mode, fixed: fixed_mm(app), angle: angle_setting(app), size }));
+    ARROW_HOVER.with(|h| h.set((false, h.get().0)));
+}
+
+/// A dialog arrow is under the pointer this frame.
+pub fn note_arrow_hovered() {
+    ARROW_HOVER.with(|h| h.set((true, h.get().1)));
+}
+
+/// The arrow keys belong to a dialog arrow under the pointer, not to the view. The frame before
+/// counts too: keys are read before the arrows are drawn.
+pub fn arrow_takes_keys() -> bool {
+    ARROW_HOVER.with(|h| {
+        let (now, before) = h.get();
+        now || before
+    })
+}
+
+/// Steps the arrow keys pressed this frame ask a hovered arrow for: Up and Right add one, Down and
+/// Left take one away, Shift ten. The keys are then taken, so nothing after the arrow acts on them
+/// too. None while another field or a menu has the keyboard (the arrow's own value box, which
+/// opens with it, does not count), or with Ctrl or Alt (Ctrl+arrows still pan the view).
+pub fn arrow_key_steps(ctx: &egui::Context) -> i32 {
+    let value_box = |id: egui::Id| id == egui::Id::new("sc_canvas_value") || id == egui::Id::new("sc_canvas_value2");
+    if ctx.memory(|m| m.focused().is_some_and(|f| !value_box(f))) || egui::Popup::is_any_open(ctx) {
+        return 0;
+    }
+    let arrow = |key: &egui::Key| match key {
+        egui::Key::ArrowUp | egui::Key::ArrowRight => 1,
+        egui::Key::ArrowDown | egui::Key::ArrowLeft => -1,
+        _ => 0,
+    };
+    ctx.input_mut(|i| {
+        if i.modifiers.command || i.modifiers.ctrl || i.modifiers.alt {
+            return 0;
+        }
+        let each = if i.modifiers.shift { 10 } else { 1 };
+        let steps = i
+            .events
+            .iter()
+            .map(|e| match e {
+                egui::Event::Key { key, pressed: true, .. } => arrow(key) * each,
+                _ => 0,
+            })
+            .sum();
+        i.events.retain(|e| !matches!(e, egui::Event::Key { key, .. } if arrow(key) != 0));
+        steps
+    })
+}
+
+/// `from` moved by `steps` whole steps, keeping its offset from the step (an exactly typed
+/// value stays exact), without binary noise.
+pub fn nudge(from: f64, steps: i32, step: f64) -> f64 {
+    let v = from + f64::from(steps) * step;
+    let clean = (v * 1e9).round() / 1e9;
+    if clean.is_finite() { clean } else { from }
 }
 
 /// The largest extent of what a manipulator works on: the selection while a tool is open,
@@ -193,12 +253,58 @@ pub fn summary(app: &SolveApp) -> String {
     }
 }
 
+/// A step typed with or without its unit ("0.05 in", "0.2"): bare numbers are in the design's
+/// unit. None for anything that is not a usable step (zero, negative, out of range, not a value).
+pub fn typed_length(doc: &solidcraft_engine::doc::Document, text: &str) -> Option<f64> {
+    let mm = crate::length_input::eval(doc, text, solidcraft_engine::doc::expr::Kind::Length).ok()?;
+    (mm.is_finite() && LINEAR_RANGE.contains(&mm)).then_some(mm)
+}
+
+/// An angle step typed with or without its unit ("2.5 deg", "0.1 rad"), in degrees.
+pub fn typed_angle(doc: &solidcraft_engine::doc::Document, text: &str) -> Option<f64> {
+    let rad = crate::length_input::eval(doc, text, solidcraft_engine::doc::expr::Kind::Angle).ok()?;
+    let deg = rad.to_degrees();
+    (deg.is_finite() && ANGLE_RANGE.contains(&deg)).then_some(deg)
+}
+
+/// A number without trailing zeros, for a field's text.
+fn trim_number(v: f64) -> String {
+    let text = format!("{v:.4}");
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// The menu's Custom row: a field that takes a value with its unit. What is typed stays in the
+/// field until it reads as a step (then that step is returned) or the setting changes elsewhere.
+fn custom_row(
+    app: &SolveApp,
+    ui: &mut egui::Ui,
+    key: &str,
+    shown: &str,
+    current: f64,
+    read: impl Fn(&solidcraft_engine::doc::Document, &str) -> Option<f64>,
+) -> Option<f64> {
+    let id = egui::Id::new(("sc_step_draft", key));
+    let mut draft =
+        ui.data(|d| d.get_temp::<(String, f64)>(id)).filter(|(_, at)| (*at - current).abs() < 1e-12).map_or_else(|| shown.to_string(), |(t, _)| t);
+    let label = app.tr("ui.step_custom").to_string();
+    let (enter, changed, rect) = crate::ui_kit::row(ui, &label, |ui| {
+        let (enter, changed) = crate::ui_kit::text_field(ui, &mut draft, "");
+        (enter, changed, ui.min_rect())
+    });
+    crate::scenario::publish_target(key, rect);
+    let typed = if changed || enter { read(&app.session.doc, &draft) } else { None };
+    // A step that reads is kept against the value it sets, so the draft stays as typed.
+    let at = typed.unwrap_or(current);
+    ui.data_mut(|d| d.insert_temp(id, (draft, at)));
+    typed
+}
+
 /// The step menu beside the browser's title: Automatic, Zoom, or a fixed step, and the angle
 /// step. A choice is a preference, kept with the others.
 pub fn menu(app: &mut SolveApp, ui: &mut egui::Ui) {
     use crate::ui_kit::{Menu, MenuItem};
     let label = crate::i18n::format("ui.step_button", &[("step", &summary(app))]);
-    let r = Menu::text(ui, &label, |ui| {
+    let r = Menu::text_with_field(ui, &label, |ui| {
         // Rows fill the popup: keep it as narrow as a context menu.
         ui.set_width(crate::context_menu::LIST_W);
         Menu::heading(ui, app.tr("ui.step_heading_length"));
@@ -222,13 +328,10 @@ pub fn menu(app: &mut SolveApp, ui: &mut egui::Ui) {
                 ui.close();
             }
         }
-        let mut custom = current;
-        let text = app.tr("ui.step_custom").to_string();
-        let response = crate::ui_kit::row(ui, &text, |ui| crate::ui_kit::number_field(ui, &mut custom, LINEAR_RANGE, 0.01, " mm"));
-        crate::scenario::publish_target("step:custom", response.rect);
-        if response.changed() {
+        let shown = crate::canvas::format_len(&app.session.doc, current);
+        if let Some(mm) = custom_row(app, ui, "step:custom", &shown, current, typed_length) {
             app.preferences.manipulator_step = StepMode::Fixed;
-            app.preferences.manipulator_step_mm = clamp(custom, &LINEAR_RANGE, 1.0);
+            app.preferences.manipulator_step_mm = mm;
         }
         Menu::separator(ui);
         Menu::heading(ui, app.tr("ui.step_heading_angle"));
@@ -240,6 +343,10 @@ pub fn menu(app: &mut SolveApp, ui: &mut egui::Ui) {
                 app.preferences.manipulator_angle_deg = deg;
                 ui.close();
             }
+        }
+        let shown = format!("{} deg", trim_number(angle));
+        if let Some(deg) = custom_row(app, ui, "step:angle:custom", &shown, angle, typed_angle) {
+            app.preferences.manipulator_angle_deg = deg;
         }
     });
     crate::scenario::publish_target("browser:step", r.response.rect);
@@ -269,6 +376,25 @@ mod tests {
         assert_eq!(snap(0.004, 0.01), 0.0);
         assert_eq!(snap(2.0, 0.0), 2.0);
         assert!(snap(f64::NAN, 1.0).is_nan());
+    }
+
+    #[test]
+    fn steps_typed_with_units_are_read_in_millimetres_and_degrees() {
+        let doc = solidcraft_engine::doc::Document::default();
+        assert_eq!(typed_length(&doc, "0.1 mm"), Some(0.1));
+        assert!((typed_length(&doc, "0.05 in").unwrap() - 1.27).abs() < 1e-9);
+        assert_eq!(typed_length(&doc, "0"), None);
+        assert_eq!(typed_length(&doc, "-1 mm"), None);
+        assert_eq!(typed_length(&doc, "width"), None);
+        assert!((typed_angle(&doc, "2.5 deg").unwrap() - 2.5).abs() < 1e-9);
+        assert_eq!(typed_angle(&doc, "400 deg"), None);
+    }
+
+    #[test]
+    fn arrow_keys_move_by_whole_steps_from_the_value_as_it_is() {
+        assert_eq!(nudge(12.34, 1, 0.1), 12.44);
+        assert_eq!(nudge(15.0, -10, 0.1), 14.0);
+        assert_eq!(nudge(1.0, 0, 5.0), 1.0);
     }
 
     #[test]
@@ -356,5 +482,40 @@ mod tests {
         h.step(&json!({"click":{"handle":"menu:step:auto"}})).unwrap();
         h.frames(2);
         assert_eq!(h.app.preferences.manipulator_step, StepMode::Automatic);
+    }
+
+    #[test]
+    fn arrow_keys_step_the_hovered_extrude_arrow_and_leave_the_view_alone() {
+        use serde_json::json;
+        let mut h = extruded();
+        h.app.preferences.manipulator_step = StepMode::Fixed;
+        h.app.preferences.manipulator_step_mm = 0.5;
+        h.frames(2);
+        let cam = h.app.cam;
+        h.step(&json!({"move":{"handle":"arrow"}})).unwrap();
+        h.frames(2);
+        h.step(&json!({"key":"ArrowUp"})).unwrap();
+        h.frames(2);
+        assert_eq!(distance(&h), "10.5 mm");
+        h.step(&json!({"key":"ArrowDown","shift":true})).unwrap();
+        h.frames(2);
+        assert_eq!(distance(&h), "5.5 mm");
+        assert_eq!(h.app.cam, cam, "the view does not turn while the arrow has the keys");
+    }
+
+    #[test]
+    fn a_typed_custom_step_with_a_unit_becomes_the_fixed_step() {
+        use serde_json::json;
+        let mut h = crate::scenario::Harness::new();
+        h.frames(2);
+        h.step(&json!({"click":{"handle":"browser:step"}})).unwrap();
+        h.frames(2);
+        h.step(&json!({"click":{"handle":"step:custom"}})).unwrap();
+        h.step(&json!({"key":"A","cmd":true})).unwrap();
+        h.step(&json!({"text":"0.05 in"})).unwrap();
+        h.step(&json!({"key":"Enter"})).unwrap();
+        h.frames(2);
+        assert_eq!(h.app.preferences.manipulator_step, StepMode::Fixed);
+        assert!((h.app.preferences.manipulator_step_mm - 1.27).abs() < 1e-9);
     }
 }
