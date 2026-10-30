@@ -832,8 +832,10 @@ mod tests {
     fn a_segfault_is_reported_with_its_signal_module_frames_and_step() {
         let (v, r, _) = crash("segv", "segv", SIGSEGV);
         assert_eq!(v["signal"], "SIGSEGV", "{v}");
-        // Address 16 is in __PAGEZERO, mapped without access: SEGV_ACCERR.
-        assert_eq!(v["detail"], "read of 0x0000000000000010 (SEGV_ACCERR)", "{v}");
+        // Address 16 is in __PAGEZERO, mapped without access: Apple silicon reports SEGV_ACCERR,
+        // an Intel Mac SEGV_MAPERR.
+        let code = if cfg!(target_arch = "x86_64") { "SEGV_MAPERR" } else { "SEGV_ACCERR" };
+        assert_eq!(v["detail"], format!("read of 0x0000000000000010 ({code})"), "{v}");
         assert!(v["module"].as_str().unwrap().contains("solidcraft"), "the fault is in the test binary: {v}");
         let frames = v["frames"].as_array().unwrap();
         assert!(frames.len() >= 3, "{v}");

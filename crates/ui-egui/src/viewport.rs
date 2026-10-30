@@ -10541,9 +10541,21 @@ mod tests {
             let img = crate::control::view_rgba(&h.app, 320, 240).unwrap();
             img.as_chunks::<4>().0.iter().filter(|p| p[..3].iter().zip([c.r(), c.g(), c.b()]).all(|(a, b)| a.abs_diff(b) <= 8)).count()
         };
+        // The picture's most common colours, for a failure message.
+        let common = |h: &crate::scenario::Harness| {
+            let img = crate::control::view_rgba(&h.app, 320, 240).unwrap();
+            let mut n = std::collections::BTreeMap::<[u8; 3], usize>::new();
+            for p in img.as_chunks::<4>().0 {
+                *n.entry([p[0], p[1], p[2]]).or_default() += 1;
+            }
+            let mut v: Vec<_> = n.into_iter().collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            v.truncate(8);
+            format!("{v:?}")
+        };
         let (off, deutan) = (Tokens::light().sketch_locked, Tokens::themed(false, ColorVision::Deutan).sketch_locked);
         let (a, b) = (count(&h, off), count(&h, deutan));
-        assert!(a > 20 && b == 0, "Off: {a} fixed-line pixels, {b} in Deutan's colour");
+        assert!(a > 20 && b == 0, "Off: {a} fixed-line pixels, {b} in Deutan's colour; wanted {off:?}, picture {}", common(&h));
         h.app.preferences.color_vision = ColorVision::Deutan;
         let (a, b) = (count(&h, off), count(&h, deutan));
         assert!(a == 0 && b > 20, "Deutan: {a} fixed-line pixels in Off's colour, {b} in Deutan's");
