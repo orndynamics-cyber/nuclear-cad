@@ -6982,16 +6982,30 @@ mod tests {
     }
 
     /// Headless pictures of the view (`ui.render`, the agent's view image) are drawn in the
-    /// window's theme (#974) and colour vision mode (#778). The light theme's tokens are the engine's own colours, so a
-    /// light picture in Off is unchanged; otherwise each part takes the token the window draws it
+    /// window's theme (#974) and colour vision mode (#778). The light theme's tokens are the engine's own colours apart
+    /// from Nuclear Light's backdrop and grid; otherwise each part takes the token the window draws it
     /// with. Sketch states follow what the window does with them (`sketch_color`) and the axes the
     /// mode's axis colours, so the two can't drift apart.
     #[test]
     fn pictures_are_drawn_in_the_windows_theme() {
         use crate::theme::ColorVision;
         use solidcraft_engine::view::Palette;
-        assert_eq!(scene_palette(false, ColorVision::Off), Palette::DEFAULT, "the light theme is the engine's colours");
         let rgb = |c: Color32| Rgb(c.r(), c.g(), c.b());
+        // Nuclear Light keeps the engine's model colours and draws its own warm-grey backdrop.
+        let (light, l) = (scene_palette(false, ColorVision::Off), Tokens::light());
+        assert_eq!(
+            Palette {
+                background: Palette::DEFAULT.background,
+                grid: Palette::DEFAULT.grid,
+                grid_major: Palette::DEFAULT.grid_major,
+                body_selected: Palette::DEFAULT.body_selected,
+                ..light
+            },
+            Palette::DEFAULT,
+            "the light theme is the engine's colours apart from the backdrop and Nuclear's selection"
+        );
+        assert_eq!(light.body_selected, rgb(l.body_selected));
+        assert_eq!((light.background, light.grid, light.grid_major), ((rgb(l.viewport_top), rgb(l.viewport_bottom)), rgb(l.grid), rgb(l.grid_major)));
         let (p, t) = (scene_palette(true, ColorVision::Off), Tokens::dark());
         assert_eq!(p.background, (rgb(t.viewport_top), rgb(t.viewport_bottom)));
         assert_eq!(

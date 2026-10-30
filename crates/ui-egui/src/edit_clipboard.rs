@@ -228,7 +228,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
         replace_clipboard(app);
         let names: Vec<String> = placements.iter().filter_map(|p| app.session.occurrence_placement(p).ok()).map(|p| p.name).collect();
         app.set_status(format!("Copied {} (Ctrl+V pastes an instance, Ctrl+Shift+V a new copy)", names.join(", ")), false);
-        leave_text(app, format!("SolidCraft components: {}", names.join(", ")));
+        leave_text(app, format!("Nuclear components: {}", names.join(", ")));
         app.copied_placements = placements;
         return true;
     }
@@ -237,7 +237,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
         app.session.clipboard.clear();
         replace_clipboard(app);
         app.set_status(format!("Copied {}", bodies.join(", ")), false);
-        leave_text(app, format!("SolidCraft bodies: {}", bodies.join(", ")));
+        leave_text(app, format!("Nuclear bodies: {}", bodies.join(", ")));
         app.copied_bodies = bodies;
         return true;
     }
@@ -248,7 +248,7 @@ pub fn copy(app: &mut SolveApp) -> bool {
     replace_clipboard(app);
     let names: Vec<&str> = out.get("copied").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).collect()).unwrap_or_default();
     app.set_status(format!("Copied {}", names.join(", ")), false);
-    leave_text(app, format!("SolidCraft features: {}", names.join(", ")));
+    leave_text(app, format!("Nuclear features: {}", names.join(", ")));
     true
 }
 
@@ -302,7 +302,7 @@ pub fn cut(app: &mut SolveApp) -> bool {
             clear_clipboard(app);
             let names: Vec<String> = placements.iter().filter_map(|p| app.session.occurrence_placement(p).ok()).map(|p| p.name).collect();
             app.set_status(format!("Cut {}: paste to move it into a component (Esc leaves it)", names.join(", ")), false);
-            leave_text(app, format!("SolidCraft components: {}", names.join(", ")));
+            leave_text(app, format!("Nuclear components: {}", names.join(", ")));
             app.cut_placements = placements;
             return true;
         }
@@ -312,7 +312,7 @@ pub fn cut(app: &mut SolveApp) -> bool {
         }
         clear_clipboard(app);
         app.set_status(format!("Cut {}: paste to move it into a component (Esc leaves it)", bodies.join(", ")), false);
-        leave_text(app, format!("SolidCraft bodies: {}", bodies.join(", ")));
+        leave_text(app, format!("Nuclear bodies: {}", bodies.join(", ")));
         app.cut_bodies = bodies;
         return true;
     }

@@ -855,14 +855,14 @@ fn unclean_exit(dir: &Path, build: &Build, journal: &Path) {
                 frames.extend(walk.iter().filter_map(Value::as_str).take(MAX_FRAMES).map(|f| limited(f, 300)));
             }
             (
-                format!("SolidCraft {was} (started {when}) crashed with {name} ({code}) in {at} {during}"),
+                format!("Nuclear {was} (started {when}) crashed with {name} ({code}) in {at} {during}"),
                 format!("native exception in {at}"),
                 format!("{code} {short} {}", starting.as_ref().map_or(doing.unwrap_or("idle"), |(p, _)| p.as_str())),
                 frames,
             )
         }
         None => (
-            format!("SolidCraft {was} (started {when}) ended without a clean exit {during}"),
+            format!("Nuclear {was} (started {when}) ended without a clean exit {during}"),
             match (&starting, doing) {
                 (Some((p, _)), _) => format!("unclean exit during startup: {p}"),
                 (None, c) => format!("unclean exit in {}", c.unwrap_or("(between commands)")),

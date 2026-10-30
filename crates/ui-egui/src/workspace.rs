@@ -97,6 +97,12 @@ const CONFIGURE: &[&str] = &["parameters.change", "config.table", "config.config
 /// itself after every edit, so a Solve button (and the search hit for it) only confuses.
 pub const AGENT_ONLY: &[&str] = &["sketch.solve"];
 
+/// Inspect on MODEL: measuring and sectioning first, then the solid checks.
+const MODEL_INSPECT: &[&str] = &["inspect.measure", "inspect.section", "inspect.center_of_mass", "inspect.interference", "inspect.draft"];
+/// Inspect on SURFACE: measuring and sectioning first, then the surface-quality checks.
+const SURFACE_INSPECT: &[&str] =
+    &["inspect.measure", "inspect.section", "inspect.zebra", "inspect.curvature_map", "inspect.curvature_comb", "inspect.continuity"];
+
 pub const SECTIONS: &[Section] = &[
     Section {
         tab: "MODEL",
@@ -119,6 +125,9 @@ pub const SECTIONS: &[Section] = &[
     },
     Section { tab: "MODEL", panel: "CONFIGURE", promoted: 2, ids: CONFIGURE },
     Section { tab: "MODEL", panel: "CONSTRUCT", promoted: 1, ids: &["construct.plane.offset"] },
+    // Inspect sits inside the modelling tabs too, at the end of their regular panels (the INSPECT
+    // tab keeps the full set): the same commands and measurement state, not copies.
+    Section { tab: "MODEL", panel: "INSPECT", promoted: 2, ids: MODEL_INSPECT },
     // Only while a linked design is edited in place, pinned at the right as FINISH SKETCH is.
     Section { tab: "MODEL", panel: "FINISH EDITING", promoted: 1, ids: &["component.finish_edit"] },
     // Sketches drive surfaces too: New Sketch leads the tab, as on MODEL and SHEET METAL.
@@ -126,6 +135,7 @@ pub const SECTIONS: &[Section] = &[
     Section { tab: "SURFACE", panel: "CREATE", promoted: 4, ids: &["surface.extrude", "surface.revolve", "surface.sweep", "surface.loft"] },
     Section { tab: "SURFACE", panel: "EDIT", promoted: 4, ids: &["surface.trim", "surface.untrim", "surface.extend", "surface.stitch"] },
     Section { tab: "SURFACE", panel: "CONVERT", promoted: 2, ids: &["surface.thicken", "mesh.convert"] },
+    Section { tab: "SURFACE", panel: "INSPECT", promoted: 2, ids: SURFACE_INSPECT },
     Section {
         tab: "ASSEMBLE",
         panel: "COMPONENTS",
@@ -499,7 +509,10 @@ pub(crate) fn legacy_render_destination(c: &CommandSpec) -> Option<(&'static str
         "config.table" | "config.configure" => Some(("MANAGE", "CONFIGURATIONS")),
         _ => None,
     };
+    // Inspect commands also shown inside Model and Surface keep the Inspect tab as their home.
+    let inspect_home = || SECTIONS.iter().find(|s| s.tab == "INSPECT" && s.ids.contains(&c.id)).map(|s| (s.tab, s.panel));
     primary
+        .or_else(inspect_home)
         .or_else(|| SECTIONS.iter().chain(LEGACY_RENDER_SECTIONS).find(|s| s.ids.contains(&c.id)).map(|s| (s.tab, s.panel)))
         .or_else(|| PLACEMENTS.iter().find(|(t, p, ..)| *t == c.tab && *p == c.panel).map(|(_, _, t, p)| (*t, *p)))
 }

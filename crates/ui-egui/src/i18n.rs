@@ -239,7 +239,7 @@ impl Locale {
             let message = self.format("diagnostic.empty_boolean_component", &[("component", &component), ("body", &body), ("other", &other)]);
             return format!("{before}{message}{after}");
         }
-        text.to_string()
+        product_name(text)
     }
 
     /// Translate generated browser names and labels, preserving custom names otherwise.
@@ -342,6 +342,32 @@ pub fn tr_dyn(text: &str) -> String {
 pub fn tr_name(text: &str) -> String {
     CURRENT.with(|current| current.get().given_name(text))
 }
+/// The product as people see it: messages from the engine and file readers name the upstream
+/// project ("not a SolidCraft design", "update SolidCraft"), and this fork is Nuclear. Credits
+/// and the upstream project's own name stay ("SolidCraft contributors", "upstream SolidCraft",
+/// "based on SolidCraft"); lower-case identifiers (`.solidcraft`, `solidcraft-cli`) are never
+/// touched.
+pub fn product_name(text: &str) -> String {
+    const KEEP: [&str; 4] = ["SolidCraft contributors", "upstream SolidCraft", "based on SolidCraft", "SolidCraft project"];
+    if !text.contains("SolidCraft") {
+        return text.to_string();
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("SolidCraft") {
+        let kept = KEEP.iter().find_map(|k| {
+            let lead = k.find("SolidCraft").unwrap_or(0);
+            (at >= lead && rest.get(at - lead..).is_some_and(|r| r.starts_with(k))).then_some(k.len() - lead)
+        });
+        out.push_str(rest.get(..at).unwrap_or_default());
+        let len = kept.unwrap_or("SolidCraft".len());
+        out.push_str(if kept.is_some() { rest.get(at..at + len).unwrap_or_default() } else { "Nuclear" });
+        rest = rest.get(at + len..).unwrap_or_default();
+    }
+    out.push_str(rest);
+    out
+}
+
 pub fn tr_diagnostic(text: &str) -> String {
     CURRENT.with(|current| current.get().diagnostic(text))
 }
@@ -352,6 +378,18 @@ mod tests {
 
     /// Strings a pull request adds under `assets/locales/pending/` work before they are folded
     /// into the catalogs (the build merges them in).
+    /// Engine messages name the product as Nuclear; credits and identifiers stay as they are.
+    #[test]
+    fn engine_messages_name_the_product_nuclear() {
+        assert_eq!(
+            product_name("this design was saved by a newer SolidCraft: update SolidCraft to open it"),
+            "this design was saved by a newer Nuclear: update Nuclear to open it"
+        );
+        assert_eq!(product_name("not a SolidCraft design (.solidcraft)"), "not a Nuclear design (.solidcraft)");
+        assert_eq!(product_name("© SolidCraft contributors; based on SolidCraft"), "© SolidCraft contributors; based on SolidCraft");
+        assert_eq!(product_name("no brand here"), "no brand here");
+    }
+
     #[test]
     fn pending_messages_are_in_the_catalogs() {
         let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/locales/pending");

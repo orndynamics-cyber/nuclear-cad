@@ -526,7 +526,7 @@ const NO_MEANING: &[(&str, &str)] = &[
     ("app_bar_hover", "a hovered tab, translucent white"),
     ("timeline_marker", "the rollback marker, alone"),
     ("field", "a field's ground"),
-    // Highlights: shades of the accent blue over what they mark, by design close to each other.
+    // Highlights: shades of the Nuclear orange over what they mark, by design close to each other.
     ("sel_edge", "selection highlight"),
     ("sel_edge_rim", "selection highlight"),
     ("hover_edge", "hover highlight"),
@@ -632,8 +632,14 @@ fn left_as_they_are(mode: ColorVision, dark: bool) -> BTreeSet<String> {
     let mut v = vec!["sketch lines: sketch_construction vs sketch_centerline"];
     if mode == ColorVision::Tritan {
         v.push("sketch lines: sketch_lost vs sketch_centerline");
-        v.push(if dark { "timeline: hover vs accent_soft" } else { "timeline: timeline_item vs accent_soft" });
-        v.push("selection: sel_face vs preview_add");
+        // Nuclear's warm greys and orange tint sit near the error tint for blue-yellow eyes; an
+        // error row also carries its error mark, so the row still reads.
+        v.push(if dark { "timeline: timeline_item_error vs accent_soft" } else { "timeline: timeline_item_error vs hover" });
+        // Nuclear's orange selection and the red cut preview are both warm for blue-yellow eyes;
+        // the cut preview is translucent over the body and only shows while a cut is set up.
+        if !dark {
+            v.push("selection: body_selected vs preview_cut");
+        }
     }
     v.into_iter().map(String::from).collect()
 }
@@ -777,11 +783,13 @@ fn each_mode_changes_only_its_table() {
     let mut red_green_light =
         red_green_both.into_iter().filter(|name| !["surface_accent", "mesh_accent", "form_accent"].contains(name)).collect::<Vec<_>>();
     red_green_light.extend(["sketch_projected", "sketch_locked", "timeline_item_error", "construction_geom", "glyph_text", "form_success"]);
+    let mut red_green_dark = red_green_both.to_vec();
+    red_green_dark.extend(["timeline_item_error", "warning"]);
     for (dark, mode, want) in [
         (false, ColorVision::Protan, set(&red_green_light)),
-        (true, ColorVision::Protan, set(&red_green_both)),
+        (true, ColorVision::Protan, set(&red_green_dark)),
         (false, ColorVision::Deutan, set(&red_green_light)),
-        (true, ColorVision::Deutan, set(&red_green_both)),
+        (true, ColorVision::Deutan, set(&red_green_dark)),
         (
             false,
             ColorVision::Tritan,

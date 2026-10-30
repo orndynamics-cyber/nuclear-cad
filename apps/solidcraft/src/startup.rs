@@ -315,13 +315,13 @@ pub fn max_file_size(value: Option<&str>) -> Result<u64, String> {
 pub fn no_window_message(error: &str, settings: Option<&Path>) -> String {
     let folder = settings.map(|d| d.display().to_string()).unwrap_or_else(|| "the Nuclear settings folder".into());
     format!(
-        "SolidCraft could not open its window.\n\n{error}\n\n\
+        "Nuclear could not open its window.\n\n{error}\n\n\
          The software renderer was tried too. Things to try:\n\
          - Install or update the graphics driver (on Windows, from the GPU maker's site rather than Windows Update).\n\
          - Over Remote Desktop or in a virtual machine, enable 3D acceleration or run it on the machine itself.\n\
-         - Start it once with `solidcraft --safe-mode`.\n\
+         - Start it once with `nuclear --safe-mode` (`solidcraft --safe-mode` from a source build).\n\
          - Rename the settings folder: {folder}\n\n\
-         More: https://docs.solidcraft.io/guide/troubleshooting.html"
+         More (upstream SolidCraft guide): https://docs.solidcraft.io/guide/troubleshooting.html"
     )
 }
 

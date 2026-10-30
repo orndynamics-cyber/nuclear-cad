@@ -473,8 +473,13 @@ fn window_page<const INDEX: usize>(ui: &mut egui::Ui, app: &mut SolveApp) {
     page(app, ui, &Tokens::get());
 }
 
-pub const THEMES: &[(&str, &str)] = &[("dark", "Dark"), ("light", "Light"), ("system", "System")];
+/// The theme modes offered beside the theme files. The old built-in Dark and Light are the
+/// Nuclear palettes now (`palettes.rs`), so their ids only live on as aliases
+/// ([`canonical_theme`]).
+pub const THEMES: &[(&str, &str)] = &[("system", "System")];
 /// The theme files Follow System uses for a dark and a light system.
+/// The appearance settings' migration version (see [`lenient`]).
+pub const APPEARANCE_VERSION: u32 = 2;
 pub const SYSTEM_DARK: &str = "nuclear-graphite";
 pub const SYSTEM_LIGHT: &str = "nuclear-light";
 
@@ -986,7 +991,7 @@ preference_settings! {
     /// Missing (read as 0) in preferences saved before the Nuclear themes, whose `dark` and
     /// `light` were the default look; [`lenient`] moves those to Nuclear Graphite and Nuclear
     /// Light once, and saving writes 1, so a later choice of the old Dark or Light stays.
-    nuclear_appearance: u32 = 1;
+    nuclear_appearance: u32 = APPEARANCE_VERSION;
     /// Ribbon density: comfortable (larger icons and targets, the default) or compact.
     toolbar_density: crate::toolbar::Density = crate::toolbar::Density::Comfortable, PAGE_INTERFACE;
     /// The 3D view's background, apart from the theme: the theme's own, a studio gradient, or a
@@ -1548,15 +1553,13 @@ fn theme_row(app: &mut SolveApp, ui: &mut egui::Ui) {
     let mut choices = theme_choices(app);
     // While a file is followed (#7573) it is the theme, so no tile shows as chosen.
     let following = !app.prefs_window.follow.path(&app.preferences.theme_follow).is_empty();
-    // Nuclear's own themes and Follow System first, then the classic Light and Dark.
+    // Nuclear's own themes and Follow System first, then the other theme files.
     choices.sort_by_key(|(id, _)| match id.as_str() {
         "nuclear-graphite" => 0,
         "nuclear-carbon" => 1,
         "nuclear-light" => 2,
         "system" => 3,
-        "light" => 4,
-        "dark" => 5,
-        _ => 6,
+        _ => 4,
     });
     let mut tile_action: Option<(&str, String)> = None;
     let mut action_theme: Option<String> = None;
@@ -1825,7 +1828,9 @@ pub fn apply(app: &mut SolveApp, ctx: &egui::Context) {
     follow_theme_file(app, ctx);
     // Follow System keeps Nuclear's accent: Nuclear Graphite or Nuclear Light.
     let system = if app.ui.dark { SYSTEM_DARK } else { SYSTEM_LIGHT };
-    let id = if app.preferences.theme == "system" { system } else { app.preferences.theme.as_str() };
+    // Whatever the field holds (a script may set `dark`), the palette is a Nuclear one.
+    let chosen = canonical_theme(&app.preferences.theme, &app.preferences.custom_themes);
+    let id = if chosen == "system" { system } else { chosen.as_str() };
     let file = app.prefs_window.follow.theme().or_else(|| crate::theme_files::find(id, &app.preferences.custom_themes));
     if let Some(f) = file {
         app.ui.dark = f.base.is_dark();
@@ -2978,8 +2983,24 @@ fn theme_choices(app: &SolveApp) -> Vec<(String, String)> {
     modes.chain(files).collect()
 }
 
+/// The theme a saved or requested id stands for, so no path lands on a palette outside Nuclear's
+/// design system: the old `dark` and `light` ids are Nuclear Graphite and Nuclear Light, System
+/// stays (it follows the system between those two), a theme file keeps its id, and anything else
+/// (empty, removed, misspelt) is Nuclear Graphite.
+pub fn canonical_theme(id: &str, custom: &[crate::theme_files::ThemeFile]) -> String {
+    match id {
+        "dark" => SYSTEM_DARK,
+        "light" => SYSTEM_LIGHT,
+        "system" => "system",
+        _ if crate::theme_files::find(id, custom).is_some() => id,
+        _ => SYSTEM_DARK,
+    }
+    .to_string()
+}
+
 /// Turn a theme on (a mode or a theme file's id); dark follows it.
 fn select_theme(app: &mut SolveApp, id: &str) {
+    let id = &canonical_theme(id, &app.preferences.custom_themes);
     app.preferences.theme = id.to_string();
     match crate::theme_files::find(id, &app.preferences.custom_themes) {
         Some(f) => app.ui.dark = f.base.is_dark(),
@@ -3155,16 +3176,13 @@ fn limit_disabled_plugins(mut p: Prefs) -> Prefs {
 /// its default on its own instead of discarding all of them.
 pub fn lenient(saved: &serde_json::Value) -> Prefs {
     let mut p = lenient_inner(saved);
-    // Saved before the Nuclear themes: the old default looks become the Nuclear ones, once (an
-    // explicit later choice of Dark or Light stays, as the field is saved from then on).
-    if saved.as_object().is_some_and(|o| !o.contains_key("nuclear_appearance")) {
-        match p.theme.as_str() {
-            "dark" => p.theme = "nuclear-graphite".into(),
-            "light" => p.theme = "nuclear-light".into(),
-            _ => {}
-        }
-    }
-    p.nuclear_appearance = 1;
+    // Appearance migration (`nuclear_appearance`): 1 moved the old default Dark and Light to the
+    // Nuclear pair once; 2 resolves every saved theme through `canonical_theme`, so an old Dark or
+    // Light (chosen or inherited: they are the Nuclear palettes now), an empty, removed or unknown
+    // id all land on a Nuclear theme. Nuclear variants, System, the other theme files and the
+    // viewport's own settings are kept. Saved back as resolved, so it never alternates.
+    p.theme = canonical_theme(&p.theme, &p.custom_themes);
+    p.nuclear_appearance = APPEARANCE_VERSION;
     p
 }
 
@@ -3232,7 +3250,11 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     {
         return Err("`stand_up_unknown` must be ask, note or off".into());
     }
-    let new: Prefs = migrate(serde_json::from_value(cur).map_err(|e| e.to_string())?);
+    let mut new: Prefs = migrate(serde_json::from_value(cur).map_err(|e| e.to_string())?);
+    // `dark` and `light` name the Nuclear pair; an unknown id is refused below, as before.
+    if matches!(new.theme.as_str(), "dark" | "light") {
+        new.theme = canonical_theme(&new.theme, &new.custom_themes);
+    }
     if !UNITS.contains(&new.default_units.as_str()) {
         return Err(format!("units must be one of {}", UNITS.join(", ")));
     }
@@ -4910,7 +4932,7 @@ mod tests {
             assert!(set(&mut h.app, &json!({"browser_bodies_folders": bad})).is_err(), "{bad}");
             assert_eq!(h.app.preferences, before, "{bad}: a refused value changes nothing");
             let saved = lenient(&json!({"browser_bodies_folders": bad, "theme": "light", "nuclear_appearance": 1}));
-            assert_eq!((saved.browser_bodies_folders, saved.theme.as_str()), (BodiesFolders::Several, "light"), "{bad}");
+            assert_eq!((saved.browser_bodies_folders, saved.theme.as_str()), (BodiesFolders::Several, "nuclear-light"), "{bad}");
         }
         h.call("ui.prefs", json!({"open": "Interface"}));
         reveal_preference(&mut h, "dialog:Bodies folders:Always");
@@ -4958,7 +4980,7 @@ mod tests {
 
         let mut other = crate::SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
         other.load_prefs(&h.app.prefs());
-        assert_eq!((other.preferences.theme.as_str(), other.ui.dark, other.viewport_dark()), ("light", false, true));
+        assert_eq!((other.preferences.theme.as_str(), other.ui.dark, other.viewport_dark()), ("nuclear-light", false, true));
 
         let out = h.call("ui.prefs", json!({"theme": "gruvbox-dark-hard", "viewport_theme": "light"}));
         assert_eq!((out["result"]["dark"].as_bool(), out["result"]["viewport_dark"].as_bool()), (Some(true), Some(false)), "{out}");
@@ -5145,7 +5167,7 @@ mod tests {
         let mut h = crate::scenario::Harness::new();
         let out = h.call("ui.prefs", json!({"theme": "gruvbox-dark-hard"}));
         assert_eq!(out["result"]["theme"], "gruvbox-dark-hard", "{out}");
-        assert!(out["result"]["theme_ids"].as_array().is_some_and(|ids| ids.len() == 3 + crate::theme_files::builtin().len()), "{out}");
+        assert!(out["result"]["theme_ids"].as_array().is_some_and(|ids| ids.len() == THEMES.len() + crate::theme_files::builtin().len()), "{out}");
         h.frames(2);
         let hard = crate::theme_files::find("gruvbox-dark-hard", &[]).map(crate::theme_files::resolve).unwrap();
         assert!(h.app.ui.dark);
@@ -5190,7 +5212,7 @@ mod tests {
         assert_eq!(other.preferences.custom_themes[0].borders, h.app.preferences.custom_themes[0].borders);
 
         let out = h.call("ui.prefs", json!({"theme_remove": "paper"}));
-        assert_eq!((out["result"]["theme"].as_str(), out["result"]["dark"].as_bool()), (Some("light"), Some(false)), "{out}");
+        assert_eq!((out["result"]["theme"].as_str(), out["result"]["dark"].as_bool()), (Some("nuclear-light"), Some(false)), "{out}");
         assert!(h.app.preferences.custom_themes.is_empty());
         assert!(h.call("ui.prefs", json!({"theme_remove": "paper"}))["error"].is_string());
 
@@ -5198,7 +5220,7 @@ mod tests {
         h.call("ui.prefs", json!({"open": "Interface"}));
         h.call("ui.prefs", json!({"theme_import": file}));
         let out = h.call("ui.prefs", json!({"button": "cancel"}));
-        assert_eq!(out["result"]["theme"], "dark", "{out}");
+        assert_eq!(out["result"]["theme"], SYSTEM_DARK, "{out}");
         assert!(h.app.preferences.custom_themes.is_empty(), "Cancel takes the import back");
         h.frames(2);
         assert_eq!(Tokens::get().panel, Tokens::dark().panel);
@@ -5898,14 +5920,72 @@ mod tests {
     /// Preferences saved before the Nuclear themes move from the old default Dark and Light to
     /// Nuclear Graphite and Nuclear Light once; a later explicit choice of Dark stays.
     #[test]
-    fn old_default_themes_move_to_the_nuclear_ones_once() {
-        assert_eq!(lenient(&json!({"theme": "dark"})).theme, "nuclear-graphite");
-        assert_eq!(lenient(&json!({"theme": "light"})).theme, "nuclear-light");
-        assert_eq!(lenient(&json!({"theme": "gruvbox-dark"})).theme, "gruvbox-dark");
-        let chosen = serde_json::to_value(lenient(&json!({"theme": "dark", "nuclear_appearance": 1}))).unwrap();
-        assert_eq!(chosen["theme"], "dark");
-        assert_eq!(lenient(&chosen).theme, "dark", "a choice saved by this version stays");
+    fn theme_contract_every_path_lands_on_a_nuclear_palette() {
+        use crate::theme::Tokens;
+        let hex = |c: egui::Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+        // Fresh install, missing, old default, old explicit, empty and unknown themes.
         assert_eq!(Prefs::default().theme, "nuclear-graphite");
+        for (saved, want) in [
+            (json!({}), "nuclear-graphite"),
+            (json!({"theme": "dark"}), "nuclear-graphite"),
+            (json!({"theme": "light"}), "nuclear-light"),
+            (json!({"theme": "dark", "nuclear_appearance": 1}), "nuclear-graphite"),
+            (json!({"theme": ""}), "nuclear-graphite"),
+            (json!({"theme": "no-such-theme"}), "nuclear-graphite"),
+            (json!({"theme": 7}), "nuclear-graphite"),
+            // Supported choices stay.
+            (json!({"theme": "nuclear-carbon"}), "nuclear-carbon"),
+            (json!({"theme": "nuclear-light"}), "nuclear-light"),
+            (json!({"theme": "system"}), "system"),
+            (json!({"theme": "gruvbox-dark"}), "gruvbox-dark"),
+        ] {
+            let p = lenient(&saved);
+            assert_eq!(p.theme, want, "{saved}");
+            assert_eq!(p.nuclear_appearance, APPEARANCE_VERSION);
+            // Saved as resolved: loading it again changes nothing (no alternating looks).
+            assert_eq!(lenient(&serde_json::to_value(&p).unwrap()).theme, want);
+        }
+        // The viewport's own settings survive the migration.
+        let p = lenient(&json!({"theme": "dark", "viewport_background": "custom", "viewport_custom": "#123456"}));
+        assert_eq!((p.viewport_background, p.viewport_custom.as_str()), (crate::theme::ViewportBackground::Custom, "#123456"));
+        // The built-in palettes, the fallback for anything without a theme file (the first frame,
+        // the view drawn in the other side's colours), are Nuclear's own.
+        let (dark, light) = (Tokens::dark(), Tokens::light());
+        assert_eq!(
+            [
+                hex(dark.app_bar),
+                hex(dark.panel),
+                hex(dark.control_fill),
+                hex(dark.hover),
+                hex(dark.text),
+                hex(dark.text_dim),
+                hex(dark.accent),
+                hex(dark.border)
+            ],
+            ["#191c20", "#23272d", "#2d333b", "#39424d", "#f1f3f5", "#b8c0cb", "#ff7a32", "#414a56"]
+        );
+        // Nuclear Light darkens the accent so it holds contrast on its pale panels.
+        assert_eq!(hex(light.accent), "#b8480f");
+        // Nuclear Graphite and Nuclear Light add no colour to those palettes (only shapes and
+        // icons): one source of truth for every colour.
+        for (id, base) in [("nuclear-graphite", dark), ("nuclear-light", light)] {
+            let file = crate::theme_files::find(id, &[]).unwrap();
+            let colours = |t: &Tokens| crate::theme_files::export(id, file.base, t)["colors"].clone();
+            assert_eq!(colours(&crate::theme_files::resolve(file)), colours(&base), "{id}");
+        }
+        // No theme file at all (before preferences load) still draws Nuclear.
+        let previous = crate::theme::set_custom(None);
+        assert_eq!(hex(Tokens::themed(true, crate::theme::ColorVision::Off).accent), "#ff7a32");
+        let _ = previous;
+        // Restore appearance defaults, a script's old ids and Follow System stay Nuclear.
+        let mut app = SolveApp::new(solidcraft_engine::Session::default(), Default::default());
+        app.preferences.theme = "gruvbox-dark".into();
+        super::interface::restore_appearance(&mut app);
+        assert_eq!(app.preferences.theme, "nuclear-graphite");
+        assert!(set(&mut app, &json!({"theme": "light"})).is_ok());
+        assert_eq!(app.preferences.theme, "nuclear-light");
+        assert_eq!(canonical_theme("system", &[]), "system");
+        assert_eq!((SYSTEM_DARK, SYSTEM_LIGHT), ("nuclear-graphite", "nuclear-light"));
     }
 
     #[test]
@@ -5914,7 +5994,7 @@ mod tests {
         let old: Prefs = serde_json::from_value(json!({"theme":"light","msaa":4})).unwrap();
         assert!(!old.cosmetic_threads && old.theme == "light" && old.msaa == 4);
         let malformed = lenient(&json!({"cosmetic_threads":"yes","theme":"light","nuclear_appearance":1}));
-        assert!(!malformed.cosmetic_threads && malformed.theme == "light");
+        assert!(!malformed.cosmetic_threads && malformed.theme == "nuclear-light");
         let mut h = crate::scenario::Harness::new();
         let design = h.app.session.doc.to_json();
         h.call("ui.prefs", json!({"open":"Graphics"}));

@@ -1168,6 +1168,20 @@ fn visuals(dark: bool) -> egui::Visuals {
         widget.corner_radius = egui::CornerRadius::same(t.radius_sm / 2);
     }
     v.widgets.hovered.corner_radius = egui::CornerRadius::same(t.radius_sm.saturating_sub(1));
+    // The rest of egui's own palette (its blue links, cursor and pressed fill, its status
+    // colours) would otherwise show through in plain widgets: every one comes from the theme.
+    v.hyperlink_color = t.accent;
+    v.text_cursor.stroke = Stroke::new(2.0, t.accent);
+    v.warn_fg_color = t.warning;
+    v.error_fg_color = t.error;
+    v.code_bg_color = t.field;
+    v.widgets.active.bg_fill = t.accent_soft;
+    v.widgets.active.fg_stroke = Stroke::new(1.0, t.text);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.0, t.text);
+    v.widgets.open.bg_fill = t.panel_header;
+    v.widgets.open.fg_stroke = Stroke::new(1.0, t.text);
+    v.widgets.noninteractive.bg_fill = t.panel;
+    v.widgets.noninteractive.weak_bg_fill = t.panel;
     v
 }
 
@@ -1311,23 +1325,22 @@ mod tests {
     #[test]
     fn tab_accents_match_approved_palette() {
         let rgb = |hex: u32| egui::Color32::from_rgb((hex >> 16) as u8, (hex >> 8) as u8, hex as u8);
+        // Nuclear's workspace tints: each workspace keeps its own restrained, warm-leaning colour
+        // (none of them blue) so the tab says where you are, and Model is the Nuclear orange.
         for (tab, light, dark) in [
-            ("SKETCH", [0x057f45, 0x057f45, 0xedf7f1], [0x128d45, 0x46be78, 0x1f3b2b]),
-            ("SURFACE", [0xa45000, 0xa45000, 0xfbebd8], [0xb26a14, 0xe0914a, 0x45331e]),
-            ("MESH", [0xe0b200, 0x8a6d00, 0xfff8dc], [0xc6a800, 0xd4b726, 0x41391a]),
-            ("FORM", [0x7349cd, 0x7349cd, 0xeee8fa], [0x8a6fcc, 0xb39bee, 0x372f4f]),
-            ("SHEET METAL", [0x1e6f96, 0x1e6f96, 0xe1f0f7], [0x2a7fa8, 0x4fb3d9, 0x1f3a47]),
-            ("RENDER", [0xa8326e, 0xa8326e, 0xf8e6ef], [0xc8588f, 0xe074ae, 0x402336]),
+            ("SKETCH", [0x057f45, 0x04703c, 0xedf7f1], [0x128d45, 0x46be78, 0x1f3b2b]),
+            ("SURFACE", [0x8f5a00, 0x7f5000, 0xf6e8d2], [0xe8a03c, 0xf0b45e, 0x433522]),
+            ("MESH", [0x6f6400, 0x625800, 0xf2efd6], [0xc9b24a, 0xd6c266, 0x3a3824]),
+            ("FORM", [0x7a4aa8, 0x6e3f9c, 0xf0e8f6], [0xb48ad6, 0xc9a8e8, 0x3a2f45]),
+            ("SHEET METAL", [0x56606b, 0x4b545e, 0xe6e8eb], [0xa9b3be, 0xc2cad3, 0x323840]),
+            ("RENDER", [0xa83a48, 0x9c3241, 0xf7e2e4], [0xe0707a, 0xee9099, 0x46282c]),
         ] {
             for (t, values) in [(super::Tokens::light(), light), (super::Tokens::dark(), dark)] {
                 let [color, ink, soft] = values.map(rgb);
                 assert_eq!(super::TabAccent::for_tab(&t, tab), super::TabAccent { color, ink, soft }, "{tab}");
             }
-            let accent = super::TabAccent::for_tab(&super::Tokens::light(), tab);
-            assert_eq!(accent.ink != accent.color, tab == "MESH", "only light Mesh separates ink from fill");
         }
-        // These existing Model values intentionally take precedence over the board's proposal.
-        for (t, values) in [(super::Tokens::light(), [0x2678da, 0x1a507f, 0xd6e6fa]), (super::Tokens::dark(), [0x3a88ee, 0x9cc7f5, 0x2a466e])] {
+        for (t, values) in [(super::Tokens::light(), [0xb8480f, 0x2a251f, 0xf4e1d3]), (super::Tokens::dark(), [0xff7a32, 0xf1f3f5, 0x4a3020])] {
             let [color, ink, soft] = values.map(rgb);
             assert_eq!(super::TabAccent::for_tab(&t, "MODEL"), super::TabAccent { color, ink, soft });
         }

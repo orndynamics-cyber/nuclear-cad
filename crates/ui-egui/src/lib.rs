@@ -1017,7 +1017,7 @@ impl SolveApp {
         prefs::apply_file_limits(&self.preferences);
         // Saved before the theme was a preference: the Dark/Light flag says which.
         if v.get("preferences").and_then(|p| p.get("theme")).is_none() {
-            self.preferences.theme = if self.ui.dark { "dark" } else { "light" }.into();
+            self.preferences.theme = if self.ui.dark { prefs::SYSTEM_DARK } else { prefs::SYSTEM_LIGHT }.into();
         }
         if let Some(g) = flag("ground_shadow") {
             self.ui.ground_shadow = g;
