@@ -211,6 +211,16 @@ jobs:
         run: |
           mkdir -p smoke
           screencapture -x smoke/desktop.png || true
+      - name: Print the pictures (base64 JPEG, for reviewers without artifact access)
+        if: always()
+        run: |
+          for f in smoke/*.png; do
+            [ -s "$f" ] || continue
+            sips -s format jpeg -s formatOptions 70 -Z 1400 "$f" --out "${f%.png}.jpg" >/dev/null
+            echo "==BEGIN $(basename "${f%.png}.jpg")=="
+            base64 -b 76 -i "${f%.png}.jpg"
+            echo "==END=="
+          done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
