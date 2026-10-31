@@ -1,13 +1,57 @@
 {
-  "ar": { "prefs.browser_full_height": "المستعرض يملأ الجانب الأيسر", "prefs.quiet_grid": "شبكة أهدأ خارج الرسومات" },
-  "de": { "prefs.browser_full_height": "Browser füllt die linke Seite", "prefs.quiet_grid": "Dezenteres Raster außerhalb von Skizzen" },
-  "en": { "prefs.browser_full_height": "Browser fills the left side", "prefs.quiet_grid": "Quieter grid outside sketches" },
-  "en-GB": { "prefs.browser_full_height": "Browser fills the left side", "prefs.quiet_grid": "Quieter grid outside sketches" },
-  "fr": { "prefs.browser_full_height": "Le navigateur occupe tout le côté gauche", "prefs.quiet_grid": "Grille plus discrète hors esquisses" },
-  "he": { "prefs.browser_full_height": "הדפדפן ממלא את הצד השמאלי", "prefs.quiet_grid": "רשת שקטה יותר מחוץ לסקיצות" },
-  "ja": { "prefs.browser_full_height": "ブラウザーを左側いっぱいに表示", "prefs.quiet_grid": "スケッチ外ではグリッドを控えめに" },
-  "pt-BR": { "prefs.browser_full_height": "Navegador ocupa toda a lateral esquerda", "prefs.quiet_grid": "Grade mais suave fora dos esboços" },
-  "ru": { "prefs.browser_full_height": "Браузер занимает всю левую сторону", "prefs.quiet_grid": "Более тихая сетка вне эскизов" },
-  "vi": { "prefs.browser_full_height": "Trình duyệt chiếm toàn bộ bên trái", "prefs.quiet_grid": "Lưới nhạt hơn ngoài bản phác thảo" },
-  "zh": { "prefs.browser_full_height": "浏览器占满左侧", "prefs.quiet_grid": "草图外网格更淡" }
+  "ar": {
+    "prefs.browser_full_height": "المستعرض يملأ الجانب الأيسر",
+    "prefs.density_nuclear": "Nuclear (كبير)",
+    "prefs.quiet_grid": "شبكة أهدأ خارج الرسومات"
+  },
+  "de": {
+    "prefs.browser_full_height": "Browser füllt die linke Seite",
+    "prefs.density_nuclear": "Nuclear (groß)",
+    "prefs.quiet_grid": "Dezenteres Raster außerhalb von Skizzen"
+  },
+  "en": {
+    "prefs.browser_full_height": "Browser fills the left side",
+    "prefs.density_nuclear": "Nuclear (large)",
+    "prefs.quiet_grid": "Quieter grid outside sketches"
+  },
+  "en-GB": {
+    "prefs.browser_full_height": "Browser fills the left side",
+    "prefs.density_nuclear": "Nuclear (large)",
+    "prefs.quiet_grid": "Quieter grid outside sketches"
+  },
+  "fr": {
+    "prefs.browser_full_height": "Le navigateur occupe tout le côté gauche",
+    "prefs.density_nuclear": "Nuclear (grand)",
+    "prefs.quiet_grid": "Grille plus discrète hors esquisses"
+  },
+  "he": {
+    "prefs.browser_full_height": "הדפדפן ממלא את הצד השמאלי",
+    "prefs.density_nuclear": "Nuclear (גדול)",
+    "prefs.quiet_grid": "רשת שקטה יותר מחוץ לסקיצות"
+  },
+  "ja": {
+    "prefs.browser_full_height": "ブラウザーを左側いっぱいに表示",
+    "prefs.density_nuclear": "Nuclear（大）",
+    "prefs.quiet_grid": "スケッチ外ではグリッドを控えめに"
+  },
+  "pt-BR": {
+    "prefs.browser_full_height": "Navegador ocupa toda a lateral esquerda",
+    "prefs.density_nuclear": "Nuclear (grande)",
+    "prefs.quiet_grid": "Grade mais suave fora dos esboços"
+  },
+  "ru": {
+    "prefs.browser_full_height": "Браузер занимает всю левую сторону",
+    "prefs.density_nuclear": "Nuclear (крупная)",
+    "prefs.quiet_grid": "Более тихая сетка вне эскизов"
+  },
+  "vi": {
+    "prefs.browser_full_height": "Trình duyệt chiếm toàn bộ bên trái",
+    "prefs.density_nuclear": "Nuclear (lớn)",
+    "prefs.quiet_grid": "Lưới nhạt hơn ngoài bản phác thảo"
+  },
+  "zh": {
+    "prefs.browser_full_height": "浏览器占满左侧",
+    "prefs.density_nuclear": "Nuclear（大）",
+    "prefs.quiet_grid": "草图外网格更淡"
+  }
 }

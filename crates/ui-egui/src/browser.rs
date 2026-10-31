@@ -459,6 +459,20 @@ pub fn group_action(app: &mut SolveApp, action: &str, p: &Value) {
 /// and right edges, so its corners are concentric with the card's.
 const CARD_INSET: f32 = 4.0;
 const HEADER_H: f32 = 26.0;
+/// The Browser's title row at the Nuclear density.
+const NUCLEAR_HEADER_H: f32 = 36.0;
+
+/// The Browser's title at the Nuclear density: two points above the heading size.
+const NUCLEAR_TITLE_BONUS: f32 = 2.0;
+
+/// The Browser title's text size now.
+fn title_size(t: &Tokens) -> f32 {
+    if crate::toolbar::nuclear_hud() { t.font_heading + NUCLEAR_TITLE_BONUS } else { t.font_heading }
+}
+
+fn header_height() -> f32 {
+    if crate::toolbar::nuclear_hud() { NUCLEAR_HEADER_H } else { HEADER_H }
+}
 const INDENT: f32 = 14.0;
 use crate::ui_kit::RowResp;
 
@@ -477,7 +491,8 @@ pub(crate) fn draw_row(ui: &mut egui::Ui, id: egui::Id, row: &Row<'_>) -> RowRes
     let compact = compact_tree(ui);
     let out = crate::ui_kit::tree_row(ui, id, &Row { compact, ..*row });
     if let Some(r) = out.rect.filter(|r| ui.is_rect_visible(*r)) {
-        let x = r.left() + if compact { Tokens::get().space_8 } else { 2.0 } + row.depth as f32 * INDENT;
+        let x = r.left()
+            + if compact { Tokens::get().space_8 + row.depth as f32 * INDENT } else { 2.0 + row.depth as f32 * crate::ui_kit::tree_indent() };
         let fold = row.fold.map(|_| Rect::from_min_max(pos2(x - 4.0, r.top()), pos2(x + 15.0, r.bottom())));
         DRAWN.with(|d| d.borrow_mut().push((row.label.to_string(), r, fold, row.fold)));
     }
@@ -846,7 +861,7 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
         panel_bounds(available, if vertical { None } else { app.shell.history }, if collapsed { collapsed_width() } else { width }, gap)
     };
     app.shell.browser = None;
-    let min_height = HEADER_H + 2.0 * (CARD_INSET + 1.0);
+    let min_height = header_height() + 2.0 * (CARD_INSET + 1.0);
     // A dialog in the left column holds the browser's place (`dialog_column`).
     if !crate::dialog_column::holds(app) && bounds.is_positive() && bounds.height() >= min_height {
         let fill = if container.floating() && app.preferences.browser_float { t.panel.gamma_multiply(BROWSER_FLOAT_ALPHA) } else { t.panel };
@@ -1035,7 +1050,7 @@ fn browser_contents(app: &mut SolveApp, ui: &mut egui::Ui, acts: &mut Actions, c
 /// card to just this row. The whole row is the button.
 fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
     let t = Tokens::get();
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), header_height()), Sense::hover());
     let response = ui.interact(rect, ui.id().with("browser_header"), if collapsible { Sense::click() } else { Sense::hover() });
     crate::scenario::publish_target("browser:header", rect);
     let vertical = app.ui.show_timeline && app.preferences.timeline_left;
@@ -1050,7 +1065,7 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
     let title = crate::i18n::tr("ui.browser_title").to_string();
     let kind = if collapsible { egui::WidgetType::Button } else { egui::WidgetType::Label };
     response.widget_info(|| egui::WidgetInfo::labeled(kind, true, &title));
-    let galley = ui.painter().layout_no_wrap(title, crate::fonts::semibold(t.font_heading), t.text);
+    let galley = ui.painter().layout_no_wrap(title, crate::fonts::semibold(title_size(&t)), t.text);
     let title_right = rect.left() + t.space_6 + galley.size().x;
     ui.painter().galley(pos2(rect.left() + t.space_6, rect.center().y - galley.size().y / 2.0), galley, t.text);
     let mut right = rect.right() - t.space_6;
@@ -1499,7 +1514,7 @@ fn occurrence_rows_inner(
     if let Some(rect) = r.rect.filter(|_| r.resp.is_some()) {
         OCCURRENCES.with(|d| d.borrow_mut().push((path.to_vec(), placement.name.clone(), rect, open)));
         crate::scenario::publish_handle(&format!("row:occurrence:{}", key.trim_start_matches("o:")), pos2(rect.right() - 12.0, rect.center().y));
-        let x = rect.left() + 2.0 + depth as f32 * INDENT;
+        let x = rect.left() + 2.0 + depth as f32 * crate::ui_kit::tree_indent();
         for (control, offset) in [("fold", 6.0), ("eye", 22.0), ("activate", 38.0)] {
             crate::scenario::publish_handle(&format!("{control}:occurrence:{}", key.trim_start_matches("o:")), pos2(x + offset, rect.center().y));
         }
@@ -2487,7 +2502,7 @@ fn inline_rename(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect, e: &Entry, de
     }
     let Some(mut rename) = app.menu.rename.take() else { return };
     // Where the label starts: the fold arrow, eye and icon come first.
-    let left = row.left() + 2.0 + depth as f32 * INDENT + 14.0 + 18.0 + 21.0;
+    let left = row.left() + 2.0 + depth as f32 * crate::ui_kit::tree_indent() + 14.0 + 18.0 + crate::ui_kit::tree_icon_side() + 5.0;
     let edit_rect = Rect::from_min_max(pos2(left, row.top() + 1.0), pos2(row.right() - 3.0, row.bottom() - 1.0));
     ui.painter().rect_filled(edit_rect, 3.0, Tokens::get().field);
     let id = ui.id().with(("browser_rename", &e.row_key));

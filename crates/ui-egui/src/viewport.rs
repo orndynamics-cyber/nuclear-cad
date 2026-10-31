@@ -1715,13 +1715,22 @@ fn build_sketch_scene(app: &SolveApp, proj: &Proj) -> GpuScene {
         let (grid, grid_major) = (c4(tk.grid), c4(tk.grid_major));
         // Nuclear's quieter grid: outside a sketch the minor lines are faint, so the grid frames
         // the part instead of covering the view; drawing a sketch shows them at full strength.
-        let minor_alpha = if s.active_sketch.is_none() && app.preferences.quiet_grid { QUIET_MINOR_GRID } else { 1.0 };
+        let quiet = s.active_sketch.is_none() && app.preferences.quiet_grid;
+        let nuclear = crate::toolbar::nuclear_hud();
+        let minor_alpha = if !quiet {
+            1.0
+        } else if nuclear {
+            NUCLEAR_MINOR_GRID
+        } else {
+            QUIET_MINOR_GRID
+        };
+        let major_alpha = if quiet && nuclear { NUCLEAR_MAJOR_GRID } else { 1.0 };
         for i in -n..=n {
             let t = i as f64 * minor;
             let maj = (t / major).round() * major == t;
             let col = if maj { grid_major } else { grid };
             let wd = if maj { 1.0 } else { 0.7 };
-            let strength = if maj { 1.0 } else { minor_alpha };
+            let strength = if maj { major_alpha } else { minor_alpha };
             // Two lines through the point `c + u * t`: one along v, one along u.
             for (along, across) in [(v, u), (u, v)] {
                 for (s0, s1, alpha) in fade.pieces(t) {
@@ -4196,6 +4205,9 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
     painter.add(Shape::mesh(mesh));
+    if crate::toolbar::nuclear_hud() {
+        painter.add(Shape::mesh(studio_glow(rect)));
+    }
 
     // ---- model ----
     crate::frame_watch::step(app, "viewport before the model");
@@ -5591,8 +5603,33 @@ fn points_2d(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
     }
 }
 
+/// Nuclear's studio backdrop: a soft pool of light behind the model, fading to the gradient at
+/// the edges, so the view reads like the approved reference rather than a flat fill.
+fn studio_glow(rect: Rect) -> egui::Mesh {
+    const SEGMENTS: u32 = 48;
+    let mut mesh = egui::Mesh::default();
+    let centre = pos2(rect.center().x, rect.top() + rect.height() * 0.55);
+    let radius = vec2(rect.width() * 0.55, rect.height() * 0.6);
+    mesh.colored_vertex(centre, Color32::from_white_alpha(STUDIO_GLOW_ALPHA));
+    for i in 0..SEGMENTS {
+        let a = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
+        mesh.colored_vertex(centre + vec2(a.cos() * radius.x, a.sin() * radius.y), Color32::TRANSPARENT);
+    }
+    for i in 0..SEGMENTS {
+        mesh.add_triangle(0, 1 + i, 1 + (i + 1) % SEGMENTS);
+    }
+    mesh
+}
+
+/// The studio backdrop's light at its centre (premultiplied white).
+const STUDIO_GLOW_ALPHA: u8 = 22;
+
 /// How strong the minor grid lines are outside a sketch (Nuclear's quieter default grid).
 const QUIET_MINOR_GRID: f32 = 0.45;
+/// At the Nuclear density the grid is fainter still, minor and major lines, so it frames the part
+/// without covering the view.
+const NUCLEAR_MINOR_GRID: f32 = 0.2;
+const NUCLEAR_MAJOR_GRID: f32 = 0.6;
 
 /// A grid line's colour, as faint as the fade makes it.
 fn grid_colour(c: [u8; 4], alpha: f32) -> [u8; 4] {
