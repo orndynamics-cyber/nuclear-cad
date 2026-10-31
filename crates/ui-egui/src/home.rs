@@ -30,7 +30,9 @@ type Made = (String, Option<egui::ColorImage>, Option<Session>);
 
 #[derive(Default)]
 pub struct HomeState {
-    section: Section,
+    pub(crate) section: Section,
+    /// The Projects page: the library's folders and designs.
+    pub library: crate::library_ui::View,
     pub open: bool,
     /// Recent design paths, newest first (kept in the preferences).
     pub recent: Vec<String>,
@@ -564,9 +566,11 @@ fn ask_present(h: &mut HomeState, ctx: &egui::Context, recent: &[String]) {
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
-enum Section {
+pub(crate) enum Section {
     #[default]
     Start,
+    /// The library's folders and designs (Projects).
+    Library,
     Recovery,
     Export,
 }
@@ -716,6 +720,14 @@ fn navigation(app: &SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction>
     };
     let nav = [
         ("home:start", app.tr_label("Start"), String::new(), Some(Section::Start), true, FileAction::Section(Section::Start)),
+        (
+            "home:projects",
+            app.tr_label("Projects"),
+            String::new(),
+            Some(Section::Library),
+            !cfg!(target_arch = "wasm32"),
+            FileAction::Section(Section::Library),
+        ),
         ("home:new", app.tr_label("New"), format!("{primary}N"), None, true, FileAction::New("preferred")),
         ("home:open", app.tr("ui.open"), format!("{primary}O"), None, true, FileAction::Open),
         ("home:recover", recover.as_str(), String::new(), Some(Section::Recovery), true, FileAction::Section(Section::Recovery)),
@@ -729,7 +741,7 @@ fn navigation(app: &SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction>
         ("home:about", app.tr_label("About Nuclear"), String::new(), None, true, FileAction::About),
     ];
     for (index, (id, label, key, section, enabled, picked)) in nav.into_iter().enumerate() {
-        if index == 4 || index == 8 {
+        if index == 5 || index == 9 {
             FileView::separator(ui);
         }
         let response = FileView::nav_row(ui, id, label, &key, section == Some(app.home.section), enabled && !busy);
@@ -752,6 +764,7 @@ fn content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction
             ui.spacing_mut().item_spacing.y = 0.0;
             let (title, hint) = match app.home.section {
                 Section::Start => (app.tr_label("Start"), app.tr("home.start_hint")),
+                Section::Library => (app.tr_label("Projects"), app.tr("library.hint")),
                 Section::Recovery => (app.tr_label("Recover"), app.tr("home.recovery_hint")),
                 Section::Export => (app.tr("home.export"), app.tr("home.export_hint")),
             };
@@ -775,6 +788,7 @@ fn content(app: &mut SolveApp, ui: &mut egui::Ui, action: &mut Option<FileAction
             }
             match app.home.section {
                 Section::Start => start_content(app, ui, action),
+                Section::Library => crate::library_ui::content(app, ui),
                 Section::Recovery => recovery_content(app, ui, action),
                 Section::Export => export_content(app, ui, action),
             }
@@ -945,6 +959,21 @@ fn recent_time(app: &SolveApp, path: &str) -> String {
     let Some(time) = app.home.opened_at.get(path) else { return String::new() };
     let now = web_time::SystemTime::now().duration_since(web_time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(*time);
     recent_time_at(app, *time, now)
+}
+
+/// How long ago `time` was, as the recent list says it ("5 minutes ago", "Yesterday", "3 Oct").
+pub(crate) fn time_ago(app: &SolveApp, time: u64, now: u64) -> String {
+    recent_time_at(app, time, now)
+}
+
+/// Ask for the picture of the design at `path` (shown once it has been made).
+pub(crate) fn want_picture(h: &mut HomeState, path: &str) {
+    want(h, path);
+}
+
+/// The picture of the design at `path`, once made.
+pub(crate) fn picture_of(app: &SolveApp, path: &str) -> Option<(egui::TextureId, egui::Vec2)> {
+    texture(app.home.thumbs.get(path).and_then(Option::as_ref))
 }
 
 fn recent_time_at(app: &SolveApp, time: u64, now: u64) -> String {

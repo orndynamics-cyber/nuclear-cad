@@ -161,6 +161,40 @@ pub fn dialog_folder(app: &SolveApp) -> Option<PathBuf> {
     status(app).filter(|s| s.is_ready()).and(folder(app))
 }
 
+/// The name a new design is given: `Untitled`, or `Untitled 2`, `Untitled 3`, ... when that
+/// name is already an open design's, or a design's in the library, so two new designs never
+/// offer to save over each other.
+pub fn provisional_name(app: &SolveApp) -> String {
+    let open: Vec<String> = crate::documents::tabs_info(app).into_iter().map(|(name, _)| name).collect();
+    let library = dialog_folder(app);
+    let taken = |name: &str| {
+        open.iter().filter(|n| n.as_str() == name).count() > usize::from(app.session.doc.name == name)
+            || library.as_ref().is_some_and(|dir| solidcraft_engine::io::DESIGN_EXTS.iter().any(|ext| dir.join(format!("{name}.{ext}")).exists()))
+    };
+    (1..1000u32)
+        .map(|n| if n == 1 { "Untitled".to_string() } else { format!("Untitled {n}") })
+        .find(|name| !taken(name))
+        .unwrap_or_else(|| "Untitled".into())
+}
+
+/// A new design (the active one, still blank and unsaved) gets its stable identity and a name
+/// no open design or library design has. Neither counts as a change to save.
+pub fn name_new_design(app: &mut SolveApp) {
+    if !crate::documents::active_is_blank(app) {
+        return;
+    }
+    let name = provisional_name(app);
+    let doc = std::sync::Arc::make_mut(&mut app.session.doc);
+    let mut changed = solidcraft_engine::library::ensure_document_id(doc);
+    if doc.name.starts_with("Untitled") && doc.name != name {
+        doc.name = name;
+        changed = true;
+    }
+    if changed {
+        app.session.mark_saved();
+    }
+}
+
 /// Use `dir` as the library, of `kind`. Only where new designs go changes: nothing is moved.
 fn set_folder(app: &mut SolveApp, dir: Option<PathBuf>, kind: Kind) {
     app.preferences.storage_folder = dir.map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
@@ -315,6 +349,7 @@ fn show_versions(app: &mut SolveApp, ctx: &egui::Context) {
 pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
     poll(app);
     show_versions(app, ctx);
+    crate::library_ui::show_prompt(app, ctx);
     if !app.storage.open {
         return;
     }
@@ -573,5 +608,35 @@ mod tests {
             assert!(app.storage.error.is_some());
             assert_eq!(dialog_folder(&app), None);
         }
+    }
+
+    /// A new design gets a stable identity and a name that no open design and no design in the
+    /// library has; neither is a change to save, and a rename keeps the identity.
+    #[test]
+    fn new_designs_get_an_identity_and_a_name_no_other_design_has() {
+        let (mut app, docs) = app_with_documents("provisional");
+        prepare(&mut app);
+        wait(&mut app);
+        let lib = storage::library_dir(&docs);
+        std::fs::write(lib.join("Untitled.sc"), b"saved before").unwrap();
+        crate::documents::new_design(&mut app);
+        assert_eq!(app.session.doc.name, "Untitled 2", "the library already has Untitled");
+        let first = solidcraft_engine::library::document_id(&app.session.doc).map(str::to_string);
+        assert!(first.is_some());
+        assert!(!app.session.is_dirty(), "naming a new design is not a change");
+        app.run("solid.box", serde_json::json!({"length":1,"width":1,"height":1})).unwrap();
+        crate::documents::new_tab(&mut app);
+        assert_eq!(app.session.doc.name, "Untitled 3", "another tab is Untitled 2");
+        let second = solidcraft_engine::library::document_id(&app.session.doc).map(str::to_string);
+        assert!(second.is_some() && second != first, "each design is its own document");
+        assert_eq!(
+            crate::i18n::Locale::for_language("pt-BR").given_name("Untitled 3"),
+            format!("{} 3", crate::i18n::Locale::for_language("pt-BR").text("ui.untitled"))
+        );
+        let path = lib.join("Bracket.sc");
+        app.run("file.save_as", serde_json::json!({"path": path.display().to_string()})).unwrap();
+        let renamed = solidcraft_engine::library::rename(&path, "Housing", &lib).unwrap();
+        let saved = solidcraft_engine::io::read_design(&std::fs::read(renamed).unwrap()).unwrap();
+        assert_eq!(solidcraft_engine::library::document_id(&saved).map(str::to_string), second, "saving and renaming keep the identity");
     }
 }

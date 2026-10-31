@@ -261,6 +261,12 @@ crate::dialog_descriptor::dialog_descriptors! {
             /// Move planar faces onto a target plane or face.
             DeleteFaces,
             ReplaceFace,
+            /// Move a straight edge between two planar faces (`crate::move_edge`): how far, and
+            /// which faces turn ([`crate::move_edge::MODES`]).
+            MoveEdge {
+                distance: String,
+                mode: usize,
+            },
             /// Boundary Fill: the cells the tool bodies make (a point inside, a description, filled
             /// or not), found again when the tools change.
             BoundaryFill {
@@ -841,6 +847,11 @@ impl Dialog {
                 vec![SelInput::new("Faces", PLANAR_FACES, true), SelInput::new("Target", PLANES | PLANAR_FACES, false)],
             ),
             "face.delete" => Dialog::new(Kind::DeleteFaces, vec![SelInput::new("Faces", FACES, true)]),
+            // M on an edge: not an engine command of its own, but a Draft of each face that
+            // turns, about its far side.
+            crate::move_edge::DIALOG => {
+                Dialog::new(Kind::MoveEdge { distance: length_default(s, "2"), mode: 0 }, vec![SelInput::new("Edge", EDGES, false)])
+            }
             "solid.boundary_fill" => {
                 Dialog::new(Kind::BoundaryFill { operation: 0, cells: Vec::new(), of: Vec::new() }, vec![SelInput::new("Tools", BODIES, true)])
             }
@@ -1225,6 +1236,7 @@ impl Dialog {
                 | Kind::Rib { .. }
                 | Kind::Emboss { .. }
                 | Kind::ReplaceFace
+                | Kind::MoveEdge { .. }
                 | Kind::DeleteFaces
                 | Kind::Align { .. }
                 | Kind::Remove
@@ -1304,6 +1316,7 @@ impl Dialog {
             Kind::AnglePlane { angle } => ("Angle", ValueKind::Angle, angle),
             Kind::Scale { factor } => ("Scale", ValueKind::Unitless, factor),
             Kind::OffsetFaces { distance } => ("Distance", ValueKind::Length, distance),
+            Kind::MoveEdge { distance, .. } => ("Distance", ValueKind::Length, distance),
             Kind::Sheet(k) => return k.primary(&self.inputs),
             Kind::Surface(k) => return k.primary(),
             Kind::Plastic(k) => return k.primary(),
@@ -2111,6 +2124,7 @@ fn title(k: &Kind) -> &'static str {
         Kind::Rib { web: false, .. } => "RIB",
         Kind::Rib { web: true, .. } => "WEB",
         Kind::ReplaceFace => "REPLACE FACE",
+        Kind::MoveEdge { .. } => "MOVE EDGE",
         Kind::DeleteFaces => "DELETE FACE",
         Kind::Align { .. } => "ALIGN",
         Kind::BoundaryFill { .. } => "BOUNDARY FILL",
@@ -3014,6 +3028,8 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             let icon = spec.as_ref().map_or("", |s| s.icon);
             let label = spec.as_ref().map_or(heading.as_str(), |s| tr(s.label));
             let label = if d.editing.is_some() { heading.as_str() } else { label };
+            // Move Edge runs Drafts but is its own tool to the user.
+            let label = if matches!(d.kind, Kind::MoveEdge { .. }) { tr("Move Edge") } else { label };
             let heading = crate::ui_kit::FeatureOptions { icon, title: label, drag_key, moved, docked, apply_label: repeatable.then_some("Apply") };
             let applying = app.applying.is_some();
             let mut collapsed = d.collapsed;
@@ -3896,8 +3912,16 @@ fn dialog_commands(app: &SolveApp, d: &Dialog) -> Result<Vec<(String, Value)>, S
     {
         return Err("enter the thickness".into());
     }
+    if let Kind::MoveEdge { distance, mode } = &d.kind {
+        need(0, "a straight edge")?;
+        let edge = sels(d, 0).first().ok_or("select a straight edge first")?;
+        let mm = s.doc.eval(distance, ValueKind::Length).map_err(|e| e.to_string())?;
+        return crate::move_edge::commands(app, edge, mm, *mode);
+    }
     let (cmd, params): (&str, Value) = match &d.kind {
         Kind::ChatContext => return Err("the chat takes these picks; nothing runs".into()),
+        // Built above: one Draft for each face that turns.
+        Kind::MoveEdge { .. } => return Err("select a straight edge first".into()),
         Kind::Extrude {
             distance,
             direction,

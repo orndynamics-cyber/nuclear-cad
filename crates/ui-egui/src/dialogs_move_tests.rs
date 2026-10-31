@@ -596,10 +596,74 @@ fn m_on_a_face_edits_the_face_and_never_moves_its_body() {
     assert!((bounds(&h).max.x - (x + 5.0)).abs() < 1e-6 && (bounds(&h).min - b.min).len() < 1e-6);
     h.app.run("edit.undo", json!({})).unwrap();
 
-    // An edge alone: M says how to change it and moves nothing.
+    // An edge alone: M opens Move Edge for that edge (never Move/Copy), and nothing moves yet.
     h.app.session.selection = vec![crate::dialogs::edge_sel(&h.app.session, Vec3::new(x, mid_y, b.min.z)).unwrap()];
     h.app.start("solid.move");
-    assert!(h.app.dialog.is_none() && h.app.viewport.context_menu.is_none());
-    assert!(h.app.status.as_ref().is_some_and(|(_, _, error)| *error));
+    assert!(matches!(h.app.dialog.as_ref().map(|d| &d.kind), Some(crate::dialogs::Kind::MoveEdge { .. })));
+    assert!(h.app.viewport.context_menu.is_none());
     assert_eq!(bounds(&h).max, b.max);
+}
+
+/// M on a straight edge between two planar faces moves the edge itself: the faces on it turn
+/// about their far sides, as Draft features that undo like any other. Edges with no
+/// single answer are refused with the reason and the body stays.
+#[test]
+fn m_on_an_edge_moves_the_edge_by_rebuilding_its_faces() {
+    let mut h = crate::scenario::Harness::new();
+    h.app.home.open = false;
+    h.app.run("solid.box", json!({"length": 40, "width": 30, "height": 20})).unwrap();
+    h.frames(2);
+    let bounds = |h: &crate::scenario::Harness| h.app.session.world_state().body("Body1").unwrap().mesh().bounds();
+    let b = bounds(&h);
+    let mid_y = (b.min.y + b.max.y) / 2.0;
+    let edge = crate::dialogs::edge_sel(&h.app.session, Vec3::new(b.max.x, mid_y, b.max.z)).unwrap();
+    let features = h.app.session.doc.features.len();
+
+    for (mode, to) in [
+        // Both faces: out along the bisector of the two faces.
+        (0, Vec3::new(b.max.x + 5.0 / 2f64.sqrt(), mid_y, b.max.z + 5.0 / 2f64.sqrt())),
+        // Slide along one face: the edge stays in that face's plane.
+        (1, Vec3::new(b.max.x + 5.0, mid_y, b.max.z)),
+        (2, Vec3::new(b.max.x, mid_y, b.max.z + 5.0)),
+    ] {
+        h.app.session.selection = vec![edge.clone()];
+        h.app.start("solid.move");
+        let mut d = h.app.dialog.clone().expect("M on one straight edge opens Move Edge");
+        assert!(matches!(d.kind, crate::dialogs::Kind::MoveEdge { .. }), "{:?}", d.kind);
+        assert_eq!(d.inputs[0].items, vec![edge.clone()], "the edge fills the dialog");
+        let face_a = crate::move_edge::faces_of(&h.app, &edge).unwrap();
+        // Which face is "first" is the kernel's order: slide along the one whose plane keeps `to`.
+        let mode = if mode == 0 || (to - face_a.at).dot(face_a.sides[mode - 1].normal).abs() < 1e-6 { mode } else { 3 - mode };
+        d.kind = crate::dialogs::Kind::MoveEdge { distance: "5 mm".into(), mode };
+        let commands = crate::dialogs::apply_commands(&h.app, &d).unwrap();
+        assert_eq!(commands.len(), if mode == 0 { 2 } else { 1 }, "one Draft per face that turns");
+        for (command, params) in commands {
+            h.app.run(&command, params).unwrap();
+        }
+        h.app.dialog = None;
+        assert!(crate::dialogs::edge_sel(&h.app.session, to).is_some(), "mode {mode}: the edge is at its new place");
+        let after = bounds(&h);
+        assert!((after.min - b.min).len() < 1e-6, "mode {mode}: the far sides stay");
+        while h.app.session.doc.features.len() > features {
+            h.app.run("edit.undo", json!({})).unwrap();
+        }
+        assert_eq!(bounds(&h).max, b.max, "undo puts the edge back");
+    }
+
+    // Too far: a face would fold over the body; refused, nothing changes.
+    h.app.session.selection = vec![edge.clone()];
+    h.app.start("solid.move");
+    let mut d = h.app.dialog.clone().unwrap();
+    d.kind = crate::dialogs::Kind::MoveEdge { distance: "-50 mm".into(), mode: 1 };
+    assert!(crate::dialogs::apply_commands(&h.app, &d).is_err());
+    h.app.dialog = None;
+
+    // A round edge: no single way to move it, so the reason, no dialog, and the body stays.
+    h.app.run("solid.cylinder", json!({"base": [100, 0, 0], "radius": 5, "height": 10})).unwrap();
+    h.frames(2);
+    let round = crate::dialogs::edge_sel(&h.app.session, Vec3::new(105.0, 0.0, 10.0)).unwrap();
+    h.app.session.selection = vec![round];
+    h.app.start("solid.move");
+    assert!(h.app.dialog.is_none(), "a curved edge does not open Move Edge or Move/Copy");
+    assert!(h.app.status.as_ref().is_some_and(|(_, _, error)| *error), "the reason is shown");
 }

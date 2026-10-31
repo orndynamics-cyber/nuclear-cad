@@ -114,7 +114,7 @@ permanent version under the version policy.
 | Move a face (direct edit, adjacent faces rebuilt, valid solid) | Implemented, tested | Offset Face moves a face along its normal; for a flat face any translation is its normal component, which the dialog sets directly |
 | Rotate a face about a straight edge, edge stays fixed | Implemented, tested | Draft accepts a straight edge: pull = face normal × edge, neutral plane through the edge; planar faces parallel to the edge; anything else is refused with the reason |
 | Edits are timeline features with editable parameters, undo/redo, save/reopen | Upstream, verified | Offset Face and Draft are ordinary features |
-| M on an edge alone | Partial | Says how to change it (face beside it, Fillet, Chamfer) and moves nothing; moving an edge on its own is still missing |
+| M on an edge alone | Implemented, tested | M on one straight edge between two planar faces opens Move Edge: Both Faces, Slide Along First Face or Slide Along Second Face, and a distance. Each face that changes turns about its far side (one `solid.draft` per face, so it is an editable timeline feature with undo/redo). Curved edges, edges without exactly two planar faces, coplanar faces and distances that would fold a face are refused with the reason and nothing moves (`m_on_an_edge_moves_the_edge_by_rebuilding_its_faces`) |
 | Step control for arrows (linear and angular, custom with units, arrow keys) | Implemented | Step menu beside the Browser title (`manipulator-step-menu`) |
 | Extrude: selected face first, flip, one side, two sides, symmetric, New/Join/Cut/Intersect | Upstream | Extrude dialog directions and operations |
 | Shell: add and remove single faces; continuous inner walls on revolved bodies | Upstream + implemented | Shell thread (`095e949`, `e5cc797`) |
@@ -124,9 +124,9 @@ permanent version under the version policy.
 | Interface: Nuclear identity, three languages, HUD like the concept | Implemented | Reports `nuclear-identity-migration.md`, `nuclear-hud-layout.md` |
 | Groups, motion, exploded views | Upstream | Rigid groups, joints, motion studies, exploded views |
 | Portable Windows build | Implemented | The CI artifact is a folder with `nuclear.exe` and the licence files; no installer needed |
-| Untitled designs get a stable identity in the library | Missing | Needs a document id in the format |
-| Conflict copy when the file changed elsewhere | Partial | Save refuses to overwrite a changed file; no separate conflict copy yet |
-| Library: folders, search, rename/move/duplicate, copy/migrate projects, portable project export | Missing | Recents, thumbnails and Show in Explorer exist |
+| Untitled designs get a stable identity in the library | Implemented, tested | A new design gets a random id in its metadata (`io.nuclear.document_id`, no format change) and a name no open tab and no library file has (Untitled, Untitled 2, ...); a design saved for the first time gets one too. Rename, move and Save keep it; Duplicate gives the copy a new one (`new_designs_get_an_identity_and_a_name_no_other_design_has`) |
+| Conflict copy when the file changed elsewhere | Implemented, tested | When the file changed on disk (another computer, a sync app), Save asks: Keep Both (default) writes this version as `Name (conflict, COMPUTER, YYYY-MM-DD HH.MM).sc` beside it and leaves the other version untouched; Overwrite and Cancel stay. Decided by the file's content on disk, not by clocks (`keep_both_writes_a_conflict_copy_and_leaves_the_other_version`) |
+| Library: folders, search, rename/move/duplicate, copy/migrate projects, portable project export | Implemented, tested | File view → Projects: the library's real folders and designs (with pictures), breadcrumb, search over the whole library, New Folder, and per item Open, Rename, Move to Folder, Duplicate, Export Portable Copy, Show in folder. Rename and move take the version history along and rewrite links to and from the design so references never break; names Windows refuses are rejected; nothing is ever overwritten. Portable export copies the design and every linked design into `Name (portable)/Linked designs` with links pointing at the copies (`solidcraft_engine::library` tests, `projects_page_lists_searches_renames_and_moves_real_files`) |
 
 ## 10–19. Later stages
 

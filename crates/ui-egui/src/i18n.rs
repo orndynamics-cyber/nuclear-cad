@@ -209,6 +209,13 @@ impl Locale {
         if text == "Untitled" {
             return Some(self.text("ui.untitled").to_string());
         }
+        // A new design numbered so it does not share an open or saved design's name.
+        if let Some(number) = text.strip_prefix("Untitled ")
+            && !number.is_empty()
+            && number.chars().all(|c| c.is_ascii_digit())
+        {
+            return Some(format!("{} {number}", self.text("ui.untitled")));
+        }
         for (prefix, id) in [("Sketch", "browser.sketch_name"), ("Body", "browser.body_name"), ("Component", "browser.component_name")] {
             if let Some(number) = text.strip_prefix(prefix)
                 && !number.is_empty()
