@@ -114,6 +114,9 @@ jobs:
           SHORT_VERSION="${VERSION%%-*}"
           APP=dist/Nuclear.app
           mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/Licenses" work
+          # Drop the linker's ad-hoc signatures from the halves; the joined binaries are signed below.
+          chmod u+w bin/*/*
+          for f in bin/*/*; do codesign --remove-signature "$f" || true; done
           lipo -create -output "$APP/Contents/MacOS/Nuclear" bin/arm64/solidcraft bin/x86_64/solidcraft
           # The app starts the agent's MCP server from solidcraft-cli beside the running program.
           lipo -create -output "$APP/Contents/MacOS/solidcraft-cli" bin/arm64/solidcraft-cli bin/x86_64/solidcraft-cli
