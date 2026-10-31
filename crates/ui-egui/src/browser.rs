@@ -459,6 +459,20 @@ pub fn group_action(app: &mut SolveApp, action: &str, p: &Value) {
 /// and right edges, so its corners are concentric with the card's.
 const CARD_INSET: f32 = 4.0;
 const HEADER_H: f32 = 26.0;
+/// The Browser's title row at the Nuclear density.
+const NUCLEAR_HEADER_H: f32 = 36.0;
+
+/// The Browser's title at the Nuclear density: two points above the heading size.
+const NUCLEAR_TITLE_BONUS: f32 = 2.0;
+
+/// The Browser title's text size now.
+fn title_size(t: &Tokens) -> f32 {
+    if crate::toolbar::nuclear_hud() { t.font_heading + NUCLEAR_TITLE_BONUS } else { t.font_heading }
+}
+
+fn header_height() -> f32 {
+    if crate::toolbar::nuclear_hud() { NUCLEAR_HEADER_H } else { HEADER_H }
+}
 const INDENT: f32 = 14.0;
 use crate::ui_kit::RowResp;
 
@@ -477,7 +491,8 @@ pub(crate) fn draw_row(ui: &mut egui::Ui, id: egui::Id, row: &Row<'_>) -> RowRes
     let compact = compact_tree(ui);
     let out = crate::ui_kit::tree_row(ui, id, &Row { compact, ..*row });
     if let Some(r) = out.rect.filter(|r| ui.is_rect_visible(*r)) {
-        let x = r.left() + if compact { Tokens::get().space_8 } else { 2.0 } + row.depth as f32 * INDENT;
+        let x = r.left()
+            + if compact { Tokens::get().space_8 + row.depth as f32 * INDENT } else { 2.0 + row.depth as f32 * crate::ui_kit::tree_indent() };
         let fold = row.fold.map(|_| Rect::from_min_max(pos2(x - 4.0, r.top()), pos2(x + 15.0, r.bottom())));
         DRAWN.with(|d| d.borrow_mut().push((row.label.to_string(), r, fold, row.fold)));
     }
@@ -846,7 +861,7 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
         panel_bounds(available, if vertical { None } else { app.shell.history }, if collapsed { collapsed_width() } else { width }, gap)
     };
     app.shell.browser = None;
-    let min_height = HEADER_H + 2.0 * (CARD_INSET + 1.0);
+    let min_height = header_height() + 2.0 * (CARD_INSET + 1.0);
     // A dialog in the left column holds the browser's place (`dialog_column`).
     if !crate::dialog_column::holds(app) && bounds.is_positive() && bounds.height() >= min_height {
         let fill = if container.floating() && app.preferences.browser_float { t.panel.gamma_multiply(BROWSER_FLOAT_ALPHA) } else { t.panel };
@@ -858,7 +873,8 @@ pub fn browser(app: &mut SolveApp, ui: &mut egui::Ui) {
             let response = container.show_frame(ui, frame, limits, |ui| {
                 ui.set_width(inner_width);
                 ui.set_max_height(inner_height);
-                if stacked {
+                // Nuclear's continuous sidebar: from under the ribbon down to the History.
+                if stacked || (app.preferences.browser_full_height && app.ui.layout == crate::shell::LayoutMode::Docked && !collapsed) {
                     ui.set_min_height(inner_height);
                     ui.set_clip_rect(ui.clip_rect().intersect(Rect::from_min_size(ui.max_rect().min, vec2(inner_width, inner_height))));
                 }
@@ -1034,7 +1050,7 @@ fn browser_contents(app: &mut SolveApp, ui: &mut egui::Ui, acts: &mut Actions, c
 /// card to just this row. The whole row is the button.
 fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
     let t = Tokens::get();
-    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), HEADER_H), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), header_height()), Sense::hover());
     let response = ui.interact(rect, ui.id().with("browser_header"), if collapsible { Sense::click() } else { Sense::hover() });
     crate::scenario::publish_target("browser:header", rect);
     let vertical = app.ui.show_timeline && app.preferences.timeline_left;
@@ -1049,18 +1065,34 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
     let title = crate::i18n::tr("ui.browser_title").to_string();
     let kind = if collapsible { egui::WidgetType::Button } else { egui::WidgetType::Label };
     response.widget_info(|| egui::WidgetInfo::labeled(kind, true, &title));
-    let galley = ui.painter().layout_no_wrap(title, crate::fonts::semibold(t.font_heading), t.text);
+    let galley = ui.painter().layout_no_wrap(title, crate::fonts::semibold(title_size(&t)), t.text);
+    let title_right = rect.left() + t.space_6 + galley.size().x;
     ui.painter().galley(pos2(rect.left() + t.space_6, rect.center().y - galley.size().y / 2.0), galley, t.text);
     let mut right = rect.right() - t.space_6;
     if collapsible {
         crate::ui_kit::disclosure(ui.painter(), pos2(right - t.form_section_icon_size / 2.0, rect.center().y), !collapsed, t.text_dim);
         right -= 18.0;
     }
+    // The step menu for dragged arrows sits at the row's end, the body count before it
+    // (`manipulator_step`). A narrow card (or a long title in another language) drops the count
+    // first, then the menu, rather than cover the title.
+    let label = crate::i18n::format("ui.step_button", &[("step", &crate::manipulator_step::summary(app))]);
+    let width = ui.painter().layout_no_wrap(label, FontId::proportional(t.font_label), t.form_ink).size().x + t.space_8;
     let bodies = app.session.model.state().bodies.len();
     let key = if bodies == 1 { "ui.browser_bodies_one" } else { "ui.browser_bodies_other" };
     let count = crate::i18n::format(key, &[("count", &bodies.to_string())]);
     let galley = ui.painter().layout_no_wrap(count, FontId::proportional(t.font_body), t.text_dim);
-    ui.painter().galley(pos2(right - galley.size().x, rect.center().y - galley.size().y / 2.0), galley, t.text_dim);
+    let step_rect = egui::Rect::from_min_max(
+        pos2(right - width, rect.center().y - t.control_height / 2.0),
+        pos2(right, rect.center().y + t.control_height / 2.0),
+    );
+    let with_step = step_rect.left() > title_right + t.space_8;
+    if with_step {
+        right = step_rect.left() - t.space_8;
+    }
+    if right - galley.size().x > title_right + t.space_8 {
+        ui.painter().galley(pos2(right - galley.size().x, rect.center().y - galley.size().y / 2.0), galley, t.text_dim);
+    }
     if collapsible {
         let tip = crate::i18n::tr(if collapsed { "ui.browser_expand" } else { "ui.browser_collapse" });
         if response.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tip).clicked() {
@@ -1072,6 +1104,11 @@ fn browser_header(app: &mut SolveApp, ui: &mut egui::Ui, collapsible: bool) {
                 app.tree.panel_collapsed = !app.tree.panel_collapsed;
             }
         }
+    }
+    // After the header's own response, so a click on the menu opens it instead of folding.
+    if with_step {
+        let mut step_ui = ui.new_child(egui::UiBuilder::new().id_salt("browser_step").max_rect(step_rect));
+        crate::manipulator_step::menu(app, &mut step_ui);
     }
 }
 
@@ -1477,7 +1514,7 @@ fn occurrence_rows_inner(
     if let Some(rect) = r.rect.filter(|_| r.resp.is_some()) {
         OCCURRENCES.with(|d| d.borrow_mut().push((path.to_vec(), placement.name.clone(), rect, open)));
         crate::scenario::publish_handle(&format!("row:occurrence:{}", key.trim_start_matches("o:")), pos2(rect.right() - 12.0, rect.center().y));
-        let x = rect.left() + 2.0 + depth as f32 * INDENT;
+        let x = rect.left() + 2.0 + depth as f32 * crate::ui_kit::tree_indent();
         for (control, offset) in [("fold", 6.0), ("eye", 22.0), ("activate", 38.0)] {
             crate::scenario::publish_handle(&format!("{control}:occurrence:{}", key.trim_start_matches("o:")), pos2(x + offset, rect.center().y));
         }
@@ -2465,7 +2502,7 @@ fn inline_rename(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect, e: &Entry, de
     }
     let Some(mut rename) = app.menu.rename.take() else { return };
     // Where the label starts: the fold arrow, eye and icon come first.
-    let left = row.left() + 2.0 + depth as f32 * INDENT + 14.0 + 18.0 + 21.0;
+    let left = row.left() + 2.0 + depth as f32 * crate::ui_kit::tree_indent() + 14.0 + 18.0 + crate::ui_kit::tree_icon_side() + 5.0;
     let edit_rect = Rect::from_min_max(pos2(left, row.top() + 1.0), pos2(row.right() - 3.0, row.bottom() - 1.0));
     ui.painter().rect_filled(edit_rect, 3.0, Tokens::get().field);
     let id = ui.id().with(("browser_rename", &e.row_key));
@@ -2802,7 +2839,7 @@ pub(crate) fn occurrence_triad(app: &mut SolveApp, ui: &mut egui::Ui, painter: &
     let Some(mut m) = app.tree.occurrence_move.clone() else { return };
     let before = (m.translate, m.angles);
     let Some(t) = occurrence_triad_model(app) else { return };
-    let step = crate::canvas::snap_step(app.cam.half_height());
+    let step = crate::manipulator_step::linear(proj, t.center);
     let Some(g) = gizmo::show(ui, painter, proj, egui::Id::new("sc_occ_triad"), &t, step) else { return };
     if g.started || m.drag0.is_none() {
         m.drag0 = Some((m.translate, m.angles));

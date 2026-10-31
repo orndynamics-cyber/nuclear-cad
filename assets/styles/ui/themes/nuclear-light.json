@@ -1,0 +1,56 @@
+{
+  "order": 3,
+  "provenance": "Original Nuclear theme",
+  "base": "light",
+  "colors": {},
+  "format": "solidcraft-theme/1",
+  "name": "Nuclear Light",
+  "radii": {
+    "radius_sm": 6,
+    "radius_md": 9,
+    "radius_lg": 13,
+    "radius_xl": 18,
+    "control_radius": 9,
+    "sketch_mode_radius": 10
+  },
+  "borders": {
+    "primary": {
+      "width": 1,
+      "color": "#bdb8b0"
+    },
+    "secondary": {
+      "width": 1,
+      "color": "#cfcac3"
+    },
+    "tertiary": {
+      "width": 1,
+      "color": "#d8d4ce"
+    },
+    "container": {
+      "width": 1,
+      "color": "#c9c4bc"
+    },
+    "control": {
+      "width": 1,
+      "color": "#bfbab2"
+    }
+  },
+  "icon_palette": {
+    "ink": "#2a251f",
+    "line": "#4b4338",
+    "passive-1": "#e6e0d4",
+    "passive-2": "#b9b0a0",
+    "passive-3": "#8a8272",
+    "guide": "#7a7263",
+    "solid": [
+      "#e8915a",
+      "#cf6526",
+      "#b8480f"
+    ],
+    "construction": [
+      "#fde3c4",
+      "#daa662",
+      "#a06f28"
+    ]
+  }
+}

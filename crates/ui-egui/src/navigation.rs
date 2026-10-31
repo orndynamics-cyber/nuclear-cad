@@ -369,6 +369,10 @@ pub(crate) fn view_key(app: &mut SolveApp, ctx: &egui::Context, key: egui::Key, 
         crate::viewport::look_at_selection(app);
         return true;
     }
+    // A dialog arrow under the pointer steps with the arrows instead (`manipulator_step`).
+    if !ctrl && crate::manipulator_step::arrow_takes_keys() {
+        return false;
+    }
     let (action, dx, dy): (&'static str, f32, f32) = match key {
         Key::ArrowLeft => ("left", -1.0, 0.0),
         Key::ArrowRight => ("right", 1.0, 0.0),

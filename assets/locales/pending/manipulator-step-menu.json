@@ -1,0 +1,112 @@
+{
+  "en": {
+    "ui.step_auto": "Auto",
+    "ui.step_auto_long": "Automatic (zoom + part)",
+    "ui.step_button": "Step: {step}",
+    "ui.step_custom": "Custom",
+    "ui.step_heading_angle": "Angle step",
+    "ui.step_heading_length": "Length step",
+    "ui.step_tip": "The step dragged arrows move in. Automatic follows the zoom and the size of the part; a fixed step stays the same whatever the view. Hold Alt or Ctrl while dragging for a free drag. With the pointer on an arrow, the arrow keys move it one step (Shift: ten). Custom takes a unit: 0.05 in, 2.5 deg.",
+    "ui.step_zoom": "Zoom",
+    "ui.step_zoom_long": "Zoom only"
+  },
+  "pt-BR": {
+    "ui.step_auto": "Auto",
+    "ui.step_auto_long": "Automático (zoom + peça)",
+    "ui.step_button": "Passo: {step}",
+    "ui.step_custom": "Personalizado",
+    "ui.step_heading_angle": "Passo angular",
+    "ui.step_heading_length": "Passo linear",
+    "ui.step_tip": "O passo em que as setas arrastadas se movem. Automático segue o zoom e o tamanho da peça; um passo fixo continua o mesmo em qualquer vista. Segure Alt ou Ctrl ao arrastar para um movimento livre. Com o ponteiro sobre uma seta, as teclas de seta a movem um passo (Shift: dez). Personalizado aceita unidade: 0.05 in, 2.5 deg.",
+    "ui.step_zoom": "Zoom",
+    "ui.step_zoom_long": "Somente zoom"
+  },
+  "ru": {
+    "ui.step_auto": "Авто",
+    "ui.step_auto_long": "Авто (масштаб + деталь)",
+    "ui.step_button": "Шаг: {step}",
+    "ui.step_custom": "Свой",
+    "ui.step_heading_angle": "Шаг угла",
+    "ui.step_heading_length": "Шаг длины",
+    "ui.step_tip": "Шаг, с которым движутся перетаскиваемые стрелки. Автоматический шаг зависит от масштаба и размера детали; фиксированный шаг не меняется при любом виде. Удерживайте Alt или Ctrl при перетаскивании для свободного движения. Когда указатель на стрелке, клавиши со стрелками двигают её на один шаг (Shift: на десять). В поле «Свой» можно указать единицы: 0.05 in, 2.5 deg.",
+    "ui.step_zoom": "Масштаб",
+    "ui.step_zoom_long": "Только масштаб"
+  },
+  "de": {
+    "ui.step_auto": "Auto",
+    "ui.step_auto_long": "Automatisch (Zoom und Teilgröße)",
+    "ui.step_button": "Schritt: {step}",
+    "ui.step_custom": "Eigener",
+    "ui.step_heading_angle": "Winkelschritt",
+    "ui.step_heading_length": "Längenschritt",
+    "ui.step_tip": "Der Schritt, in dem gezogene Pfeile sich bewegen. Automatisch folgt dem Zoom und der Größe des Teils; ein fester Schritt bleibt in jeder Ansicht gleich. Alt oder Strg beim Ziehen gedrückt halten für freies Ziehen.",
+    "ui.step_zoom": "Zoom",
+    "ui.step_zoom_long": "Nur Zoom"
+  },
+  "ja": {
+    "ui.step_auto": "自動",
+    "ui.step_auto_long": "自動（ズームと部品サイズ）",
+    "ui.step_button": "ステップ: {step}",
+    "ui.step_custom": "カスタム",
+    "ui.step_heading_angle": "角度ステップ",
+    "ui.step_heading_length": "長さステップ",
+    "ui.step_tip": "ドラッグした矢印が動くステップです。自動はズームと部品のサイズに従い、固定ステップはどのビューでも同じです。ドラッグ中に Alt または Ctrl を押すと自由に動かせます。",
+    "ui.step_zoom": "ズーム",
+    "ui.step_zoom_long": "ズームのみ"
+  },
+  "ko": {
+    "ui.step_auto": "자동",
+    "ui.step_auto_long": "자동(확대/축소 및 부품 크기)",
+    "ui.step_button": "단계: {step}",
+    "ui.step_custom": "사용자 지정",
+    "ui.step_heading_angle": "각도 단계",
+    "ui.step_heading_length": "길이 단계",
+    "ui.step_tip": "끌어 놓는 화살표가 움직이는 단계입니다. 자동은 확대/축소와 부품 크기를 따르고, 고정 단계는 어떤 뷰에서도 같습니다. 끄는 동안 Alt 또는 Ctrl을 누르면 자유롭게 움직입니다.",
+    "ui.step_zoom": "확대/축소",
+    "ui.step_zoom_long": "확대/축소만"
+  },
+  "zh": {
+    "ui.step_auto": "自动",
+    "ui.step_auto_long": "自动（缩放和零件尺寸）",
+    "ui.step_button": "步长：{step}",
+    "ui.step_custom": "自定义",
+    "ui.step_heading_angle": "角度步长",
+    "ui.step_heading_length": "长度步长",
+    "ui.step_tip": "拖动箭头时移动的步长。自动跟随缩放和零件尺寸；固定步长在任何视图下都保持不变。拖动时按住 Alt 或 Ctrl 可自由拖动。",
+    "ui.step_zoom": "缩放",
+    "ui.step_zoom_long": "仅缩放"
+  },
+  "ar": {
+    "ui.step_auto": "تلقائي",
+    "ui.step_auto_long": "تلقائي (التكبير وحجم القطعة)",
+    "ui.step_button": "الخطوة: {step}",
+    "ui.step_custom": "مخصص",
+    "ui.step_heading_angle": "خطوة الزاوية",
+    "ui.step_heading_length": "خطوة الطول",
+    "ui.step_tip": "الخطوة التي تتحرك بها الأسهم المسحوبة. التلقائي يتبع التكبير وحجم القطعة؛ والخطوة الثابتة تبقى نفسها في أي عرض. اضغط Alt أو Ctrl أثناء السحب لسحب حر.",
+    "ui.step_zoom": "التكبير",
+    "ui.step_zoom_long": "التكبير فقط"
+  },
+  "he": {
+    "ui.step_auto": "אוטומטי",
+    "ui.step_auto_long": "אוטומטי (זום וגודל החלק)",
+    "ui.step_button": "צעד: {step}",
+    "ui.step_custom": "מותאם אישית",
+    "ui.step_heading_angle": "צעד זווית",
+    "ui.step_heading_length": "צעד אורך",
+    "ui.step_tip": "הצעד שבו חיצים נגררים זזים. אוטומטי עוקב אחרי הזום וגודל החלק; צעד קבוע נשאר זהה בכל תצוגה. החזק Alt או Ctrl בזמן הגרירה לגרירה חופשית.",
+    "ui.step_zoom": "זום",
+    "ui.step_zoom_long": "זום בלבד"
+  },
+  "vi": {
+    "ui.step_auto": "Tự động",
+    "ui.step_auto_long": "Tự động (thu phóng và kích thước chi tiết)",
+    "ui.step_button": "Bước: {step}",
+    "ui.step_custom": "Tùy chỉnh",
+    "ui.step_heading_angle": "Bước góc",
+    "ui.step_heading_length": "Bước chiều dài",
+    "ui.step_tip": "Bước mà các mũi tên được kéo di chuyển. Tự động theo mức thu phóng và kích thước chi tiết; bước cố định giữ nguyên ở mọi góc nhìn. Giữ Alt hoặc Ctrl khi kéo để kéo tự do.",
+    "ui.step_zoom": "Thu phóng",
+    "ui.step_zoom_long": "Chỉ thu phóng"
+  }
+}

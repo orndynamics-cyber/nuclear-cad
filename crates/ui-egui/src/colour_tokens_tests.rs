@@ -28,11 +28,13 @@ fn moved_colours_keep_the_values_they_were_drawn_with() {
         assert_eq!(t.analysis.access, [[0.20, 0.75, 0.30], [0.85, 0.22, 0.20]]);
         assert_eq!(t.analysis.curvature, [[0.08, 0.12, 0.45], [0.53, 0.51, 0.425], [0.98, 0.90, 0.40]]);
         assert!(!t.analysis.hatch);
-        assert_eq!(t.logo, [Color32::from_rgb(96, 158, 236), Color32::from_rgb(58, 136, 238), Color32::from_rgb(55, 108, 197)]);
         assert_eq!(t.icons.marker_halo, Color32::from_black_alpha(150));
         assert_eq!(t.icons.agent, Color32::from_rgb(168, 85, 247));
     }
     let (l, d) = (Tokens::light(), Tokens::dark());
+    // The mark is Nuclear orange on both sides, never the old blue.
+    assert_eq!(l.logo, [Color32::from_rgb(224, 122, 60), Color32::from_rgb(184, 72, 15), Color32::from_rgb(106, 38, 4)]);
+    assert_eq!(d.logo, [Color32::from_rgb(255, 163, 110), Color32::from_rgb(255, 122, 50), Color32::from_rgb(170, 60, 10)]);
     assert_eq!((l.bend_up, l.bend_down), (Color32::from_rgb(30, 140, 50), Color32::from_rgb(200, 90, 20)));
     assert_eq!((d.bend_up, d.bend_down), (Color32::from_rgb(110, 200, 120), Color32::from_rgb(240, 150, 80)));
 }

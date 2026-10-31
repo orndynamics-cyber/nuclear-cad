@@ -285,6 +285,11 @@ impl ViewportState {
     }
 }
 
+/// Where a model point shows in the view now, if it is in front of the camera.
+pub(crate) fn screen_of(app: &SolveApp, p: Vec3) -> Option<Pos2> {
+    display_proj(app).to_screen(p)
+}
+
 fn display_proj(app: &SolveApp) -> Proj {
     projection(app, app.viewport.rect.unwrap_or_else(|| Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))))
 }
@@ -1713,15 +1718,28 @@ fn build_sketch_scene(app: &SolveApp, proj: &Proj) -> GpuScene {
         let fade = GridFade::new(app.cam.half_height(), slant, ext, far_reach);
         let n = ((fade.end / minor) as i64).clamp(1, 300);
         let (grid, grid_major) = (c4(tk.grid), c4(tk.grid_major));
+        // Nuclear's quieter grid: outside a sketch the minor lines are faint, so the grid frames
+        // the part instead of covering the view; drawing a sketch shows them at full strength.
+        let quiet = s.active_sketch.is_none() && app.preferences.quiet_grid;
+        let nuclear = crate::toolbar::nuclear_hud();
+        let minor_alpha = if !quiet {
+            1.0
+        } else if nuclear {
+            NUCLEAR_MINOR_GRID
+        } else {
+            QUIET_MINOR_GRID
+        };
+        let major_alpha = if quiet && nuclear { NUCLEAR_MAJOR_GRID } else { 1.0 };
         for i in -n..=n {
             let t = i as f64 * minor;
             let maj = (t / major).round() * major == t;
             let col = if maj { grid_major } else { grid };
             let wd = if maj { 1.0 } else { 0.7 };
+            let strength = if maj { major_alpha } else { minor_alpha };
             // Two lines through the point `c + u * t`: one along v, one along u.
             for (along, across) in [(v, u), (u, v)] {
                 for (s0, s1, alpha) in fade.pieces(t) {
-                    let col = sc.color(grid_colour(col, alpha));
+                    let col = sc.color(grid_colour(col, alpha * strength));
                     sc.under_line(w3(c + across * t + along * s0), w3(c + across * t + along * s1), col, wd);
                 }
             }
@@ -4056,6 +4074,14 @@ pub fn sketch_point_at(app: &SolveApp, proj: &Proj, pos: Pos2) -> Option<(Vec2, 
     let sid = app.session.active_sketch?;
     let st = crate::open_meshing::shown_world(app);
     let ss = st.sketch(sid)?;
+    // Drawing tools: reference snaps and inference guides (Preferences › Sketch).
+    let (o, d) = proj.ray(pos);
+    let lp = ss.plane.intersect_ray(o, d).map(|w| ss.plane.to_local(w));
+    if let Some(lp) = lp
+        && let Some(p) = crate::sketch_snap::snap_at(app, proj, &ss.sketch, &ss.plane, pos, lp)
+    {
+        return Some(p);
+    }
     for h in pick_for_tool(app, proj, pos) {
         if let Hit::SketchPoint { sketch, id, at } = h
             && sketch == sid
@@ -4063,9 +4089,7 @@ pub fn sketch_point_at(app: &SolveApp, proj: &Proj, pos: Pos2) -> Option<(Vec2, 
             return Some((at, Some(id)));
         }
     }
-    let (o, d) = proj.ray(pos);
-    let w = ss.plane.intersect_ray(o, d)?;
-    let lp = ss.plane.to_local(w);
+    let lp = lp?;
     if crate::drag_snap::suppressed() {
         return Some((lp, None));
     }
@@ -4112,6 +4136,7 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     // Preview reselect uses Primary but is skipped while a manipulator drag is under way.
     crate::drag_snap::set_suppressed(crate::prefs::suppress_sketch_snap_held(app, mods));
     crate::tool_modifiers::set_manipulator_free(crate::prefs::manipulator_free_held(app, mods));
+    crate::manipulator_step::set_frame(app);
     let manipulator_dragging = crate::tool_modifiers::manipulator_dragging();
     crate::tool_modifiers::set_manipulator_dragging(false);
     {
@@ -4185,6 +4210,9 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     mesh.add_triangle(0, 1, 2);
     mesh.add_triangle(0, 2, 3);
     painter.add(Shape::mesh(mesh));
+    if crate::toolbar::nuclear_hud() {
+        painter.add(Shape::mesh(studio_glow(rect)));
+    }
 
     // ---- model ----
     crate::frame_watch::step(app, "viewport before the model");
@@ -4769,6 +4797,7 @@ pub fn show(app: &mut SolveApp, ui: &mut egui::Ui) {
     crate::sketch3d::show(app, &painter, &proj);
     let tracking_cursor = hover.filter(|_| inside && !navigating && !app.esc_handled && !ui.input(|i| i.key_pressed(egui::Key::Escape)));
     crate::inference::track_and_show(app, &painter, &proj, tracking_cursor);
+    crate::sketch_snap::show(app, &painter, &proj);
     crate::inference::show(app, &painter, &proj);
     crate::drag_snap::show(app, &painter, &proj);
     crate::insert_handles::show(app, ui, &proj);
@@ -5579,6 +5608,34 @@ fn points_2d(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
     }
 }
 
+/// Nuclear's studio backdrop: a soft pool of light behind the model, fading to the gradient at
+/// the edges, so the view reads like the approved reference rather than a flat fill.
+fn studio_glow(rect: Rect) -> egui::Mesh {
+    const SEGMENTS: u32 = 48;
+    let mut mesh = egui::Mesh::default();
+    let centre = pos2(rect.center().x, rect.top() + rect.height() * 0.55);
+    let radius = vec2(rect.width() * 0.55, rect.height() * 0.6);
+    mesh.colored_vertex(centre, Color32::from_white_alpha(STUDIO_GLOW_ALPHA));
+    for i in 0..SEGMENTS {
+        let a = i as f32 / SEGMENTS as f32 * std::f32::consts::TAU;
+        mesh.colored_vertex(centre + vec2(a.cos() * radius.x, a.sin() * radius.y), Color32::TRANSPARENT);
+    }
+    for i in 0..SEGMENTS {
+        mesh.add_triangle(0, 1 + i, 1 + (i + 1) % SEGMENTS);
+    }
+    mesh
+}
+
+/// The studio backdrop's light at its centre (premultiplied white).
+const STUDIO_GLOW_ALPHA: u8 = 22;
+
+/// How strong the minor grid lines are outside a sketch (Nuclear's quieter default grid).
+const QUIET_MINOR_GRID: f32 = 0.45;
+/// At the Nuclear density the grid is fainter still, minor and major lines, so it frames the part
+/// without covering the view.
+const NUCLEAR_MINOR_GRID: f32 = 0.2;
+const NUCLEAR_MAJOR_GRID: f32 = 0.6;
+
 /// A grid line's colour, as faint as the fade makes it.
 fn grid_colour(c: [u8; 4], alpha: f32) -> [u8; 4] {
     [c[0], c[1], c[2], (f64::from(c[3]) * f64::from(alpha)).round().clamp(0.0, 255.0) as u8]
@@ -5649,7 +5706,7 @@ fn hover_highlight(app: &SolveApp, painter: &egui::Painter, proj: &Proj) {
 
 /// How near the pointer must come to the woken centre of a circle or arc (screen points),
 /// against 8 for other sketch points.
-const WOKEN_CENTRE_PX: f32 = 16.0;
+pub(crate) const WOKEN_CENTRE_PX: f32 = 16.0;
 
 /// Hovering a circle's or an arc's edge in the sketch being edited wakes its centre: drawn, and
 /// picked from further away, so a line or a dimension is easily taken to it, and it stays awake
@@ -6974,16 +7031,30 @@ mod tests {
     }
 
     /// Headless pictures of the view (`ui.render`, the agent's view image) are drawn in the
-    /// window's theme (#974) and colour vision mode (#778). The light theme's tokens are the engine's own colours, so a
-    /// light picture in Off is unchanged; otherwise each part takes the token the window draws it
+    /// window's theme (#974) and colour vision mode (#778). The light theme's tokens are the engine's own colours apart
+    /// from Nuclear Light's backdrop and grid; otherwise each part takes the token the window draws it
     /// with. Sketch states follow what the window does with them (`sketch_color`) and the axes the
     /// mode's axis colours, so the two can't drift apart.
     #[test]
     fn pictures_are_drawn_in_the_windows_theme() {
         use crate::theme::ColorVision;
         use solidcraft_engine::view::Palette;
-        assert_eq!(scene_palette(false, ColorVision::Off), Palette::DEFAULT, "the light theme is the engine's colours");
         let rgb = |c: Color32| Rgb(c.r(), c.g(), c.b());
+        // Nuclear Light keeps the engine's model colours and draws its own warm-grey backdrop.
+        let (light, l) = (scene_palette(false, ColorVision::Off), Tokens::light());
+        assert_eq!(
+            Palette {
+                background: Palette::DEFAULT.background,
+                grid: Palette::DEFAULT.grid,
+                grid_major: Palette::DEFAULT.grid_major,
+                body_selected: Palette::DEFAULT.body_selected,
+                ..light
+            },
+            Palette::DEFAULT,
+            "the light theme is the engine's colours apart from the backdrop and Nuclear's selection"
+        );
+        assert_eq!(light.body_selected, rgb(l.body_selected));
+        assert_eq!((light.background, light.grid, light.grid_major), ((rgb(l.viewport_top), rgb(l.viewport_bottom)), rgb(l.grid), rgb(l.grid_major)));
         let (p, t) = (scene_palette(true, ColorVision::Off), Tokens::dark());
         assert_eq!(p.background, (rgb(t.viewport_top), rgb(t.viewport_bottom)));
         assert_eq!(
@@ -7019,6 +7090,9 @@ mod tests {
             return;
         }
         let mut h = crate::scenario::Harness::new();
+        // The built-in Dark and Light themes, whose backgrounds the picture is compared with.
+        h.app.preferences.theme = "dark".into();
+        h.frame();
         h.app.run("solid.box", json!({"length": 40, "width": 30, "height": 20})).unwrap();
         h.app.cam = solidcraft_engine::view::home_camera(&h.app.session);
         for dark in [false, true, false] {
@@ -9868,7 +9942,8 @@ mod tests {
                 let history = h.app.shell.history.expect("the floating history card");
                 (browser.right(), browser.center().y, history.top())
             } else {
-                (vp.left(), vp.center().y, vp.bottom())
+                // Nuclear's docked browser runs the full height of the view's left side.
+                (h.app.shell.browser.map_or(vp.left(), |b| b.right().max(vp.left())), vp.center().y, vp.bottom())
             };
             let x = vp.center().x;
             for p in [
@@ -10895,6 +10970,8 @@ mod grid_plane_tests {
         let mut app = SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
         app.ui.show_grid = true;
         app.ui.perspective = true;
+        // The fade alone: every line at its full strength in the middle of the view.
+        app.preferences.quiet_grid = false;
         // A low view of the ground: the far ground is in the picture, where the grid used to end
         // in a cut.
         app.cam.pitch = 0.25;

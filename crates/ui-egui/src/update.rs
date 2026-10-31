@@ -523,13 +523,7 @@ impl Release {
                 is_release_url(&url).then(|| Asset { name, url, size: a.get("size").and_then(Value::as_u64).unwrap_or(0) })
             })
             .collect();
-        Ok(Release {
-            name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("SolidCraft {tag}")),
-            tag,
-            notes,
-            page,
-            assets,
-        })
+        Ok(Release { name: Some(s("name")).filter(|n| !n.trim().is_empty()).unwrap_or_else(|| format!("Nuclear {tag}")), tag, notes, page, assets })
     }
 
     /// The version without the `v`.

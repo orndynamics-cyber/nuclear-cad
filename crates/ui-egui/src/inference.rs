@@ -60,6 +60,11 @@ pub fn clear() {
     PENDING.with(|p| *p.borrow_mut() = None);
 }
 
+/// Keep `i` for the line being drawn (a tangent or perpendicular the reference snap found).
+pub(crate) fn hold(i: Inference) {
+    keep(Some(i));
+}
+
 pub fn current() -> Option<Inference> {
     PENDING.with(|p| p.borrow().clone())
 }
@@ -329,6 +334,8 @@ pub(crate) fn track_and_show(app: &mut SolveApp, painter: &egui::Painter, proj: 
         .and_then(|id| state.sketch(id))
         .zip(cursor)
         .filter(|_| app.preferences.sketch_tracking_guides && !crate::drag_snap::suppressed() && app.viewport.point_drag.is_none())
+        // A drawing tool follows the reference snap's own guides instead (`sketch_snap`).
+        .filter(|_| !(app.preferences.sketch_reference_snap && app.tool.as_ref().is_some_and(crate::sketch_snap::drawing_tool)))
     else {
         *tracking = Tracking::default();
         return;

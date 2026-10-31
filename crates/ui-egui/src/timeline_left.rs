@@ -73,7 +73,7 @@ pub(crate) fn stacked(app: &SolveApp) -> bool {
 
 fn header_outer_height() -> f32 {
     let t = Tokens::get();
-    crate::ui_kit::TREE_ROW_HEIGHT + t.space_8 + t.space_2
+    crate::ui_kit::tree_row_height() + t.space_8 + t.space_2
 }
 
 /// Small, allocation-free transition. Wall-clock progress avoids accumulating lag when
@@ -161,7 +161,7 @@ fn column_rects_at(app: &SolveApp, available: Rect, browser_fold: f32, history_f
 /// remembered share, kept to at least a header and two rows for either card.
 pub(crate) fn browser_split(share: f32, budget: f32, header: f32) -> f32 {
     let share = if share.is_finite() { share } else { crate::prefs::DEFAULT_BROWSER_SHARE };
-    let least = (header + 2.0 * crate::ui_kit::TREE_ROW_HEIGHT).min(budget / 2.0).max(0.0);
+    let least = (header + 2.0 * crate::ui_kit::tree_row_height()).min(budget / 2.0).max(0.0);
     (budget * share).clamp(least, (budget - least).max(least))
 }
 
@@ -337,7 +337,7 @@ fn timeline_transport(app: &mut SolveApp, ui: &mut egui::Ui, names: bool) {
     let t = Tokens::get();
     let mut controls = crate::ui_kit::HistoryTransport::shown(app.preferences.history_play_button);
     let count = controls.len() as f32;
-    let height = if names { crate::ui_kit::TREE_ROW_HEIGHT } else { t.control_height * count + t.space_2 * (count - 1.0) };
+    let height = if names { crate::ui_kit::tree_row_height() } else { t.control_height * count + t.space_2 * (count - 1.0) };
     let (header, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     crate::scenario::publish_rect("history:transport", header);
     crate::scenario::publish_rect("history:header", header);
@@ -1003,7 +1003,7 @@ fn vertical_group_row(
         group: group.parent,
         indent_group: previous_visible_group.filter(|previous| Some(*previous) != group.parent),
     });
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), crate::ui_kit::TREE_ROW_HEIGHT), Sense::click_and_drag());
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), crate::ui_kit::tree_row_height()), Sense::click_and_drag());
     drop_zones.push((rect, group.id));
     slots.push(VerticalSlot { y: rect.bottom(), position: if open { position } else { end_position }, group: Some(group.id), indent_group: None });
     if selected || response.hovered() {
@@ -1900,6 +1900,8 @@ mod tests {
     #[test]
     fn history_width_toggle_and_browser_rail_persist_independently() {
         let mut h = Harness::new();
+        // The floating cards (the layout before Nuclear's docked default).
+        h.call("ui.set", json!({"layout":"floating"}));
         h.app.preferences.timeline_left = true;
         h.settle();
         h.step(&json!({"click":{"handle":"history:names"}})).unwrap();
@@ -1992,16 +1994,17 @@ mod tests {
 
     #[test]
     fn history_follows_the_browsers_translucency_only_under_the_browser() {
-        let opaque = Tokens::get().panel;
-        let translucent = opaque.gamma_multiply(crate::browser::BROWSER_FLOAT_ALPHA);
-        for (floating, under_browser, browser_float, expected) in [
-            (true, true, true, translucent),
-            (true, true, false, opaque),
-            (true, false, true, opaque),
-            (false, true, true, opaque),
-            (false, false, true, opaque),
+        for (floating, under_browser, browser_float, see_through) in [
+            (true, true, true, true),
+            (true, true, false, false),
+            (true, false, true, false),
+            (false, true, true, false),
+            (false, false, true, false),
         ] {
             let mut h = Harness::new();
+            // The theme the harness drew with (the default is a theme file).
+            let opaque = Tokens::get().panel;
+            let expected = if see_through { opaque.gamma_multiply(crate::browser::BROWSER_FLOAT_ALPHA) } else { opaque };
             h.app.ui.layout = if floating { crate::shell::LayoutMode::Floating } else { crate::shell::LayoutMode::Docked };
             h.app.ui.show_timeline = true;
             h.app.preferences.timeline_left = true;

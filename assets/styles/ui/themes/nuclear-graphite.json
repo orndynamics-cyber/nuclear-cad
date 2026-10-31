@@ -1,0 +1,26 @@
+{
+  "order": 1,
+  "provenance": "Original Nuclear theme",
+  "base": "dark",
+  "colors": {},
+  "format": "solidcraft-theme/1",
+  "name": "Nuclear Graphite",
+  "icon_palette": {
+    "ink": "#191c20",
+    "line": "#e6e9ed",
+    "passive-1": "#bfc1c5",
+    "passive-2": "#939599",
+    "passive-3": "#6a6c6f",
+    "guide": "#b8c0cb",
+    "solid": [
+      "#ffc4a0",
+      "#ff9a5c",
+      "#ff7a32"
+    ],
+    "construction": [
+      "#f3dc9a",
+      "#dcbf6c",
+      "#c2a24c"
+    ]
+  }
+}

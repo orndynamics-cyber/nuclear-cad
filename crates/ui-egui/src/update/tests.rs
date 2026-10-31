@@ -220,7 +220,7 @@ fn release_answers_are_checked() {
     .unwrap();
     assert_eq!(r.page, RELEASES_PAGE);
     assert_eq!(r.assets.len(), 1);
-    assert_eq!(r.name, "SolidCraft v1.0.0");
+    assert_eq!(r.name, "Nuclear v1.0.0");
     // Huge notes are cut (on a character boundary).
     let r = Release::parse(json!({"tag_name": "v1.0.0", "body": "é".repeat(MAX_NOTES)}).to_string().as_bytes()).unwrap();
     assert!(r.notes.len() <= MAX_NOTES + 8 && r.notes.ends_with('…'));

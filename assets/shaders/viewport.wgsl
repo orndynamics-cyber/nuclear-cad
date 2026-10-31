@@ -532,8 +532,11 @@ fn lit_color(i: TOut, visibility: f32, base: vec4<f32>) -> vec4<f32> {
     let diff = max(dot(n, key), 0.0);
     let fill = max(dot(n, v), 0.0);
     let h = normalize(key + v);
-    let spec = pow(max(dot(n, h), 0.0), 40.0) * 0.25;
-    let k = 0.42 + 0.38 * diff + 0.25 * fill - (0.42 + 0.25 * fill) * (1.0 - visibility);
+    // A tight highlight for crisp edges, and a broad soft one (a studio softbox) so large faces
+    // read their curvature instead of shading flat.
+    let nh = max(dot(n, h), 0.0);
+    let spec = pow(nh, 40.0) * 0.22 + pow(nh, 6.0) * 0.07;
+    let k = 0.40 + 0.38 * diff + 0.25 * fill - (0.40 + 0.25 * fill) * (1.0 - visibility);
     return out_color(vec4<f32>(min(base.rgb * k + vec3<f32>(spec), vec3<f32>(1.0)), base.a));
 }
 

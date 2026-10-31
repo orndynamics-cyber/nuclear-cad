@@ -2,8 +2,8 @@
 use crate::icons::glyphs::badge;
 use crate::{icons, theme::Tokens};
 use egui::{Color32, FontId, Pos2, Rect, Sense, Stroke, pos2, vec2};
-const ROW_H: f32 = super::TREE_ROW_HEIGHT;
-const INDENT: f32 = 14.0;
+/// Nuclear's roomier tree: row names a step above the label size.
+const NAME_BONUS: f32 = 1.5;
 const DIM_ICON_OPACITY: f32 = 0.4;
 
 /// Trailing tree action; disabled actions retain their reason and a scenario rectangle.
@@ -91,7 +91,7 @@ pub(crate) struct RowResp {
 /// Geometry used by Browser culling and the shared row painter.
 pub(crate) fn tree_row_rect(ui: &egui::Ui, row: &Row<'_>) -> Rect {
     let t = Tokens::get();
-    let row_height = if row.compact { t.control_height } else { ROW_H };
+    let row_height = if row.compact { t.control_height } else { super::tree_row_height() };
     let height = row_height + if row.compact || row.subtitle.is_empty() { 0.0 } else { t.font_small + t.space_4 };
     Rect::from_min_size(ui.cursor().min, vec2(ui.available_width(), height))
 }
@@ -101,7 +101,7 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
     // Rows scrolled out of view only take their space: no widgets, no painting.
     let r = tree_row_rect(ui, row);
     let height = r.height();
-    let row_height = if row.compact { t.control_height } else { ROW_H };
+    let row_height = if row.compact { t.control_height } else { super::tree_row_height() };
     if !ui.is_rect_visible(r) {
         ui.allocate_space(r.size());
         return RowResp { rect: Some(r), ..Default::default() };
@@ -129,7 +129,7 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
     if let Some((w, colour)) = bar {
         ui.painter().rect_filled(Rect::from_min_size(r.left_top() + vec2(0.0, t.space_2), vec2(w, r.height() - 4.0)), t.radius_sm / 4, colour);
     }
-    let mut x = r.left() + if row.compact { t.space_8 + row.depth as f32 * t.space_14 } else { 2.0 + row.depth as f32 * INDENT };
+    let mut x = r.left() + if row.compact { t.space_8 + row.depth as f32 * t.space_14 } else { 2.0 + row.depth as f32 * super::tree_indent() };
     let cy = r.top() + row_height / 2.0;
     let action_width = if row.compact { t.space_16 } else { t.form_close_size };
     let action_left = (r.right() - if row.compact { t.space_8 } else { t.space_4 } - action_width * row.actions.len() as f32).max(r.left());
@@ -218,7 +218,8 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
         x += 15.0;
     }
     if !row.icon.is_empty() && !(row.compact && row.swatch.is_some()) {
-        let ir = Rect::from_min_size(pos2(x, cy - 8.0), vec2(t.space_16, t.space_16));
+        let side = if row.compact { t.space_16 } else { super::tree_icon_side() };
+        let ir = Rect::from_min_size(pos2(x, cy - side / 2.0), vec2(side, side));
         // Icons are full-colour images (a tint colour only sets their opacity): a hidden or
         // faded row draws its icon faint, like its label.
         let opacity = if row.dim { DIM_ICON_OPACITY } else { 1.0 };
@@ -226,7 +227,7 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
             Some(ink) => icons::paint_ink(ui.painter(), ir, row.icon, ink.gamma_multiply(opacity)),
             None => icons::paint_icon(ui.painter(), ir, row.icon, opacity),
         }
-        x += 21.0;
+        x += side + 5.0;
     }
     if let Some(color) = row.swatch {
         if row.compact {
@@ -242,7 +243,8 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
     let col =
         if row.selected { crate::theme::TabAccent::current(ui.ctx()).ink } else { row.color.unwrap_or(if row.dim { t.text_dim } else { t.text }) };
     let label_display = if row.name { crate::i18n::tr_name(row.label) } else { crate::i18n::tr_dyn(row.label) };
-    let font = if row.selected { crate::fonts::semibold(t.font_label) } else { FontId::proportional(t.font_label) };
+    let size = if row.compact || !crate::toolbar::nuclear_hud() { t.font_label } else { t.font_label + NAME_BONUS };
+    let font = if row.selected { crate::fonts::semibold(size) } else { FontId::proportional(size) };
     // The label stops before the badges and the card's edge; a longer name ends in an ellipsis
     // and its full text is in the tooltip.
     let badges_width = row.badges.len() as f32 * 15.0;
@@ -269,7 +271,7 @@ pub(crate) fn tree_row(ui: &mut egui::Ui, id: egui::Id, row: &Row) -> RowResp {
         job.wrap.max_rows = 1;
         job.wrap.overflow_character = Some('\u{2026}');
         let galley = ui.painter().layout_job(job);
-        ui.painter().with_clip_rect(ui.clip_rect().intersect(r)).galley(pos2(x, r.top() + ROW_H), galley, t.text_dim);
+        ui.painter().with_clip_rect(ui.clip_rect().intersect(r)).galley(pos2(x, r.top() + super::tree_row_height()), galley, t.text_dim);
     }
     let room = (right - name_action_width - x).max(0.0);
     let mut job = egui::text::LayoutJob::simple(label_display.to_string(), font, col, room);

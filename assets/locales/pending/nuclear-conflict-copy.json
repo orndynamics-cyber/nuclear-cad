@@ -1,0 +1,50 @@
+{
+  "ar": {
+    "document.keep_both": "الاحتفاظ بالاثنين",
+    "document.keep_both_detail": "تم تغيير {name} بواسطة برنامج أو حاسوب آخر منذ فتحه أو آخر حفظ. يحفظ «الاحتفاظ بالاثنين» نسختك بجانبه كنسخة تعارض باسم هذا الحاسوب والوقت ويترك النسخة الأخرى كما هي. «استبدال» يستبدل تلك التغييرات بتغييراتك."
+  },
+  "de": {
+    "document.keep_both": "Beide behalten",
+    "document.keep_both_detail": "{name} wurde seit dem Öffnen oder letzten Speichern von einem anderen Programm oder Computer geändert. Beide behalten speichert Ihre Version daneben als Konfliktkopie mit dem Namen dieses Computers und der Uhrzeit und lässt die andere Version unverändert. Überschreiben ersetzt diese Änderungen durch Ihre."
+  },
+  "en": {
+    "document.keep_both": "Keep Both",
+    "document.keep_both_detail": "{name} was changed by another program or computer since you opened or last saved it. Keep Both saves your version beside it as a conflict copy named after this computer and the time, and leaves the other version as it is. Overwrite replaces those changes with yours."
+  },
+  "en-GB": {
+    "document.keep_both": "Keep Both",
+    "document.keep_both_detail": "{name} was changed by another program or computer since you opened or last saved it. Keep Both saves your version beside it as a conflict copy named after this computer and the time, and leaves the other version as it is. Overwrite replaces those changes with yours."
+  },
+  "fr": {
+    "document.keep_both": "Conserver les deux",
+    "document.keep_both_detail": "{name} a été modifié par un autre programme ou ordinateur depuis son ouverture ou son dernier enregistrement. Conserver les deux enregistre votre version à côté comme copie de conflit portant le nom de cet ordinateur et l’heure, sans toucher l’autre version. Remplacer écrase ces modifications par les vôtres."
+  },
+  "he": {
+    "document.keep_both": "לשמור את שניהם",
+    "document.keep_both_detail": "{name} שונה על ידי תוכנה או מחשב אחר מאז שנפתח או נשמר לאחרונה. \"לשמור את שניהם\" שומר את הגרסה שלך לצידו כעותק התנגשות עם שם המחשב והשעה, ומשאיר את הגרסה האחרת כפי שהיא. \"החלפה\" מחליפה את השינויים האלה בשלך."
+  },
+  "ja": {
+    "document.keep_both": "両方を保持",
+    "document.keep_both_detail": "{name} は、開いたか最後に保存した後に別のプログラムまたはコンピューターで変更されました。「両方を保持」はあなたのバージョンを、このコンピューター名と時刻を付けた競合コピーとして隣に保存し、もう一方はそのまま残します。「上書き」はその変更をあなたの変更で置き換えます。"
+  },
+  "ko": {
+    "document.keep_both": "둘 다 유지",
+    "document.keep_both_detail": "{name}이(가) 열거나 마지막으로 저장한 후 다른 프로그램이나 컴퓨터에서 변경되었습니다. 둘 다 유지는 내 버전을 이 컴퓨터 이름과 시간을 붙인 충돌 사본으로 옆에 저장하고 다른 버전은 그대로 둡니다. 덮어쓰기는 그 변경을 내 변경으로 바꿉니다."
+  },
+  "pt-BR": {
+    "document.keep_both": "Manter ambos",
+    "document.keep_both_detail": "{name} foi alterado por outro programa ou computador desde que você o abriu ou salvou pela última vez. Manter ambos salva a sua versão ao lado como uma cópia de conflito com o nome deste computador e a hora, e deixa a outra versão como está. Substituir troca essas alterações pelas suas."
+  },
+  "ru": {
+    "document.keep_both": "Сохранить оба",
+    "document.keep_both_detail": "{name} изменён другой программой или на другом компьютере с момента открытия или последнего сохранения. «Сохранить оба» сохраняет вашу версию рядом как копию конфликта с именем этого компьютера и временем, не трогая другую версию. «Перезаписать» заменяет те изменения вашими."
+  },
+  "vi": {
+    "document.keep_both": "Giữ cả hai",
+    "document.keep_both_detail": "{name} đã bị chương trình hoặc máy tính khác thay đổi kể từ khi bạn mở hoặc lưu lần cuối. Giữ cả hai lưu phiên bản của bạn bên cạnh thành bản sao xung đột mang tên máy tính này và thời gian, giữ nguyên phiên bản kia. Ghi đè thay các thay đổi đó bằng của bạn."
+  },
+  "zh": {
+    "document.keep_both": "保留两者",
+    "document.keep_both_detail": "自您打开或上次保存以来，{name} 已被其他程序或计算机更改。“保留两者”会将您的版本另存为带有本机名称和时间的冲突副本，另一版本保持不变。“覆盖”会用您的更改替换那些更改。"
+  }
+}

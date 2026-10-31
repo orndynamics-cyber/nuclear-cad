@@ -1,0 +1,74 @@
+{
+  "ar": {
+    "Move Along the Normal": "النقل على طول العمودي",
+    "Move Face": "نقل الوجه",
+    "Neutral plane or edge": "المستوى المحايد أو حافة",
+    "Rotate About an Edge": "التدوير حول حافة"
+  },
+  "de": {
+    "Move Along the Normal": "Entlang der Normalen verschieben",
+    "Move Face": "Fläche verschieben",
+    "Neutral plane or edge": "Neutrale Ebene oder Kante",
+    "Rotate About an Edge": "Um eine Kante drehen"
+  },
+  "en": {
+    "Move Along the Normal": "Move Along the Normal",
+    "Move Face": "Move Face",
+    "Neutral plane or edge": "Neutral plane or edge",
+    "Rotate About an Edge": "Rotate About an Edge"
+  },
+  "en-GB": {
+    "Move Along the Normal": "Move Along the Normal",
+    "Move Face": "Move Face",
+    "Neutral plane or edge": "Neutral plane or edge",
+    "Rotate About an Edge": "Rotate About an Edge"
+  },
+  "fr": {
+    "Move Along the Normal": "Déplacer le long de la normale",
+    "Move Face": "Déplacer la face",
+    "Neutral plane or edge": "Plan neutre ou arête",
+    "Rotate About an Edge": "Tourner autour d'une arête"
+  },
+  "he": {
+    "Move Along the Normal": "הזזה לאורך הנורמל",
+    "Move Face": "הזזת פאה",
+    "Neutral plane or edge": "מישור ניטרלי או קצה",
+    "Rotate About an Edge": "סיבוב סביב קצה"
+  },
+  "ja": {
+    "Move Along the Normal": "法線方向に移動",
+    "Move Face": "面を移動",
+    "Neutral plane or edge": "中立面またはエッジ",
+    "Rotate About an Edge": "エッジを軸に回転"
+  },
+  "ko": {
+    "Move Along the Normal": "법선 방향으로 이동",
+    "Move Face": "면 이동",
+    "Neutral plane or edge": "중립 평면 또는 모서리",
+    "Rotate About an Edge": "모서리를 축으로 회전"
+  },
+  "pt-BR": {
+    "Move Along the Normal": "Mover ao longo da normal",
+    "Move Face": "Mover face",
+    "Neutral plane or edge": "Plano neutro ou aresta",
+    "Rotate About an Edge": "Girar em torno de uma aresta"
+  },
+  "ru": {
+    "Move Along the Normal": "Сдвинуть по нормали",
+    "Move Face": "Переместить грань",
+    "Neutral plane or edge": "Нейтральная плоскость или ребро",
+    "Rotate About an Edge": "Повернуть вокруг ребра"
+  },
+  "vi": {
+    "Move Along the Normal": "Di chuyển theo pháp tuyến",
+    "Move Face": "Di chuyển mặt",
+    "Neutral plane or edge": "Mặt phẳng trung tính hoặc cạnh",
+    "Rotate About an Edge": "Xoay quanh một cạnh"
+  },
+  "zh": {
+    "Move Along the Normal": "沿法向移动",
+    "Move Face": "移动面",
+    "Neutral plane or edge": "中性面或边",
+    "Rotate About an Edge": "绕边旋转"
+  }
+}

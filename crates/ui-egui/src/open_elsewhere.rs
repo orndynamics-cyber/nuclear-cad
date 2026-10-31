@@ -127,6 +127,40 @@ pub(crate) fn check_save(app: &mut SolveApp) -> bool {
     true
 }
 
+/// A free name beside `path` for this computer's version of a design another one changed:
+/// `Bracket (conflict, HOST, 2026-10-31 16.20).sc`, numbered if that is taken too.
+pub(crate) fn conflict_path(path: &str) -> Option<String> {
+    let p = std::path::Path::new(path);
+    let dir = p.parent()?;
+    let stem = p.file_stem()?.to_string_lossy().to_string();
+    let ext = p.extension().map(|e| e.to_string_lossy().to_string()).unwrap_or_else(|| solidcraft_engine::io::DESIGN_EXT.to_string());
+    let host: String = design_lock::host_name().chars().filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_').collect();
+    let when = utc_stamp(design_lock::now_secs());
+    let base = if host.is_empty() { format!("{stem} (conflict, {when})") } else { format!("{stem} (conflict, {host}, {when})") };
+    (1..1000)
+        .map(|n| if n == 1 { format!("{base}.{ext}") } else { format!("{base} {n}.{ext}") })
+        .map(|name| dir.join(name))
+        .find(|c| !c.exists())
+        .map(|c| c.to_string_lossy().to_string())
+}
+
+/// `YYYY-MM-DD HH.MM` (UTC) for seconds since 1970.
+fn utc_stamp(secs: u64) -> String {
+    let days = (secs / 86_400) as i64;
+    let (h, m) = ((secs % 86_400) / 3600, (secs % 3600) / 60);
+    // Civil date from days since 1970-01-01 (proleptic Gregorian).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let mo = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(mo <= 2);
+    format!("{y:04}-{mo:02}-{d:02} {h:02}.{m:02}")
+}
+
 /// The file name a prompt names.
 fn file_name(path: &str) -> String {
     std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.to_string())
@@ -207,6 +241,9 @@ fn reopen(app: &mut SolveApp, request: Request) {
 /// What "changed on disk" was answered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DiskAnswer {
+    /// Keep both (Nuclear): this work goes to a conflict copy beside the file, which stays as the
+    /// other computer left it; nothing is decided by the computers' clocks.
+    KeepBoth,
     SaveCopy,
     Overwrite,
     Cancel,
@@ -218,16 +255,16 @@ fn show_disk_prompt(app: &mut SolveApp, ctx: &egui::Context) {
     }
     let name = app.session.path.as_deref().map(file_name).unwrap_or_default();
     let title = crate::i18n::format("document.changed_on_disk", &[("name", &name)]);
-    let detail = crate::i18n::format("document.changed_on_disk_detail", &[("name", &name)]);
+    let detail = crate::i18n::format("document.keep_both_detail", &[("name", &name)]);
     let (closed, action) = ui_kit::Confirm::new(egui::Id::new("sc_changed_on_disk"), "status_warning", &title)
         .tone(ui_kit::Tone::Warning)
-        .actions(crate::i18n::tr("document.save_copy"), crate::i18n::tr("ui.cancel"), Some(crate::i18n::tr("document.overwrite")))
+        .actions(crate::i18n::tr("document.keep_both"), crate::i18n::tr("ui.cancel"), Some(crate::i18n::tr("document.overwrite")))
         .selected(ui_kit::Action::Ok)
         .show(ctx, true, |ui| {
             ui_kit::text(ui, &detail, ui_kit::Text::Report("changed_on_disk", false));
         });
     let mut answer = match action {
-        ui_kit::Action::Ok => Some(DiskAnswer::SaveCopy),
+        ui_kit::Action::Ok => Some(DiskAnswer::KeepBoth),
         ui_kit::Action::Apply => Some(DiskAnswer::Overwrite),
         ui_kit::Action::Cancel => Some(DiskAnswer::Cancel),
         ui_kit::Action::None if closed => Some(DiskAnswer::Cancel),
@@ -249,6 +286,14 @@ pub fn answer_disk(app: &mut SolveApp, answer: DiskAnswer) {
         return;
     }
     match answer {
+        DiskAnswer::KeepBoth => match app.session.path.as_deref().map(conflict_path) {
+            Some(Some(path)) => {
+                if !crate::save_job::start(app, "file.save_as", json!({"path": path})) {
+                    crate::documents::saved_for_close(app);
+                }
+            }
+            _ => crate::toolbar::save_copy(app),
+        },
         DiskAnswer::SaveCopy => crate::toolbar::save_copy(app),
         DiskAnswer::Overwrite => {
             if !crate::save_job::start(app, "file.save", json!({"overwrite": true})) {
@@ -256,5 +301,50 @@ pub fn answer_disk(app: &mut SolveApp, answer: DiskAnswer) {
             }
         }
         DiskAnswer::Cancel => crate::documents::saved_for_close(app),
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+
+    /// Another computer changed the file: Keep Both writes this computer's work to a conflict
+    /// copy beside it and leaves the other version exactly as it was.
+    #[test]
+    fn keep_both_writes_a_conflict_copy_and_leaves_the_other_version() {
+        let dir = std::env::temp_dir().join(format!("nuclear-conflict-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("Bracket.sc");
+        let mut h = crate::scenario::Harness::new();
+        h.app.home.open = false;
+        h.app.run("solid.box", json!({"length": 10, "width": 10, "height": 10})).unwrap();
+        h.app.run("file.save_as", json!({"path": path.to_string_lossy()})).unwrap();
+        // The other computer's save: different content, later on disk.
+        let mut other = solidcraft_engine::Session::default();
+        other.execute("solid.cylinder", &json!({"radius": 4, "height": 9})).unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        other.execute("file.save_as", &json!({"path": path.to_string_lossy(), "overwrite": true})).unwrap();
+        let theirs = std::fs::read(&path).unwrap();
+        h.app.run("solid.box", json!({"length": 3, "width": 3, "height": 3, "corner": [20, 0, 0]})).unwrap();
+        assert!(!check_save(&mut h.app), "Save stops to ask");
+        assert!(h.app.disk_prompt);
+        answer_disk(&mut h.app, DiskAnswer::KeepBoth);
+        for _ in 0..500 {
+            h.frames(1);
+            if h.app.saving.is_none() && !h.app.session.is_dirty() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(std::fs::read(&path).unwrap(), theirs, "the other computer's version is untouched");
+        let copy = h.app.session.path.clone().unwrap();
+        assert!(copy.contains("Bracket (conflict, ") && copy.ends_with(".sc"), "{copy}");
+        let saved = solidcraft_engine::io::read_design(&std::fs::read(&copy).unwrap()).unwrap();
+        assert_eq!(saved.features.len(), h.app.session.doc.features.len(), "this computer's work is in the copy");
+        assert!(utc_stamp(0) == "1970-01-01 00.00" && utc_stamp(1_793_464_800).starts_with("2026-10-31"));
+        drop(h);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

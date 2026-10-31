@@ -1391,7 +1391,10 @@ mod viewport_tests {
                 let top = if fullscreen { 32.0 / zoom } else { 0.0 };
                 for name in ["appbar:file", "appbar:undo", "appbar:redo", "appbar:help"] {
                     let at = handle_at(name).unwrap();
-                    assert!((at.y - top - 17.0).abs() < 0.1, "{name}: {at:?}, fullscreen={fullscreen}, zoom={zoom}");
+                    assert!(
+                        (at.y - top - solidcraft_ui_egui::toolbar::APP_BAR_HEIGHT / 2.0).abs() < 0.1,
+                        "{name}: {at:?}, fullscreen={fullscreen}, zoom={zoom}"
+                    );
                 }
                 for (handle, bodies) in [("appbar:undo", 0), ("appbar:redo", 1)] {
                     let at = handle_at(handle).unwrap();

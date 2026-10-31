@@ -107,7 +107,7 @@ crate::dialog_descriptor::dialog_descriptors! {
             FeatureKind::Shell { thickness, .. }) {
             thickness: String = "2 mm".into() => thickness.to_string(),
         } => json!({"thickness": thickness});
-        Draft("solid.draft", "DRAFT", [("Faces", FACES, true), ("Neutral plane", PLANES | PLANAR_FACES, false)],
+        Draft("solid.draft", "DRAFT", [("Faces", FACES, true), ("Neutral plane or edge", PLANES | PLANAR_FACES | EDGES, false)],
             FeatureKind::Draft { angle, .. }) {
             angle: String = "5 deg".into() => angle.to_string(),
         } => json!({"angle": angle});
@@ -261,6 +261,12 @@ crate::dialog_descriptor::dialog_descriptors! {
             /// Move planar faces onto a target plane or face.
             DeleteFaces,
             ReplaceFace,
+            /// Move a straight edge between two planar faces (`crate::move_edge`): how far, and
+            /// which faces turn ([`crate::move_edge::MODES`]).
+            MoveEdge {
+                distance: String,
+                mode: usize,
+            },
             /// Boundary Fill: the cells the tool bodies make (a point inside, a description, filled
             /// or not), found again when the tools change.
             BoundaryFill {
@@ -841,6 +847,11 @@ impl Dialog {
                 vec![SelInput::new("Faces", PLANAR_FACES, true), SelInput::new("Target", PLANES | PLANAR_FACES, false)],
             ),
             "face.delete" => Dialog::new(Kind::DeleteFaces, vec![SelInput::new("Faces", FACES, true)]),
+            // M on an edge: not an engine command of its own, but a Draft of each face that
+            // turns, about its far side.
+            crate::move_edge::DIALOG => {
+                Dialog::new(Kind::MoveEdge { distance: length_default(s, "2"), mode: 0 }, vec![SelInput::new("Edge", EDGES, false)])
+            }
             "solid.boundary_fill" => {
                 Dialog::new(Kind::BoundaryFill { operation: 0, cells: Vec::new(), of: Vec::new() }, vec![SelInput::new("Tools", BODIES, true)])
             }
@@ -1225,6 +1236,7 @@ impl Dialog {
                 | Kind::Rib { .. }
                 | Kind::Emboss { .. }
                 | Kind::ReplaceFace
+                | Kind::MoveEdge { .. }
                 | Kind::DeleteFaces
                 | Kind::Align { .. }
                 | Kind::Remove
@@ -1304,6 +1316,7 @@ impl Dialog {
             Kind::AnglePlane { angle } => ("Angle", ValueKind::Angle, angle),
             Kind::Scale { factor } => ("Scale", ValueKind::Unitless, factor),
             Kind::OffsetFaces { distance } => ("Distance", ValueKind::Length, distance),
+            Kind::MoveEdge { distance, .. } => ("Distance", ValueKind::Length, distance),
             Kind::Sheet(k) => return k.primary(&self.inputs),
             Kind::Surface(k) => return k.primary(),
             Kind::Plastic(k) => return k.primary(),
@@ -2031,6 +2044,30 @@ thread_local! {
 }
 
 /// A plane input as a command parameter: an origin/construction plane name or a face plane.
+/// Draft about a straight edge (Rotate Face): the pull direction across the faces and square to
+/// the edge, and the neutral plane through the edge square to the pull, so each face turns about
+/// its line on that plane, which is the edge's line. The faces must be planar and parallel to the
+/// edge; anything else is refused with the reason rather than given an axis of our own.
+fn hinge(app: &SolveApp, faces: &[Sel], edge: &Sel) -> Result<(Vec3, Value), String> {
+    let (at, along) = axis_of(app, edge).ok_or("the edge must be straight")?;
+    let mut pull: Option<Vec3> = None;
+    for face in faces {
+        let Sel::Face { body, index, .. } = face else { return Err("pick faces to rotate".into()) };
+        let (_, n) = planar_face(&app.session, body, *index).ok_or("only planar faces can turn about an edge")?;
+        if n.dot(along).abs() > 1e-6 {
+            return Err("the edge must be parallel to the faces".into());
+        }
+        let across = n.cross(along).normalized().ok_or("the edge must be parallel to the faces")?;
+        match pull {
+            Some(p) if p.cross(across).len() > 1e-6 => return Err("faces turning about one edge must be parallel".into()),
+            Some(_) => {}
+            None => pull = Some(across),
+        }
+    }
+    let pull = pull.ok_or("pick faces to rotate")?;
+    Ok((pull, json!({"origin": pt(at), "normal": pt(pull)})))
+}
+
 fn plane_value(s: &Session, sel: Option<&Sel>) -> Option<Value> {
     match sel? {
         Sel::Plane { name } => Some(json!(name)),
@@ -2087,6 +2124,7 @@ fn title(k: &Kind) -> &'static str {
         Kind::Rib { web: false, .. } => "RIB",
         Kind::Rib { web: true, .. } => "WEB",
         Kind::ReplaceFace => "REPLACE FACE",
+        Kind::MoveEdge { .. } => "MOVE EDGE",
         Kind::DeleteFaces => "DELETE FACE",
         Kind::Align { .. } => "ALIGN",
         Kind::BoundaryFill { .. } => "BOUNDARY FILL",
@@ -2990,6 +3028,8 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             let icon = spec.as_ref().map_or("", |s| s.icon);
             let label = spec.as_ref().map_or(heading.as_str(), |s| tr(s.label));
             let label = if d.editing.is_some() { heading.as_str() } else { label };
+            // Move Edge runs Drafts but is its own tool to the user.
+            let label = if matches!(d.kind, Kind::MoveEdge { .. }) { tr("Move Edge") } else { label };
             let heading = crate::ui_kit::FeatureOptions { icon, title: label, drag_key, moved, docked, apply_label: repeatable.then_some("Apply") };
             let applying = app.applying.is_some();
             let mut collapsed = d.collapsed;
@@ -3872,8 +3912,16 @@ fn dialog_commands(app: &SolveApp, d: &Dialog) -> Result<Vec<(String, Value)>, S
     {
         return Err("enter the thickness".into());
     }
+    if let Kind::MoveEdge { distance, mode } = &d.kind {
+        need(0, "a straight edge")?;
+        let edge = sels(d, 0).first().ok_or("select a straight edge first")?;
+        let mm = s.doc.eval(distance, ValueKind::Length).map_err(|e| e.to_string())?;
+        return crate::move_edge::commands(app, edge, mm, *mode);
+    }
     let (cmd, params): (&str, Value) = match &d.kind {
         Kind::ChatContext => return Err("the chat takes these picks; nothing runs".into()),
+        // Built above: one Draft for each face that turns.
+        Kind::MoveEdge { .. } => return Err("select a straight edge first".into()),
         Kind::Extrude {
             distance,
             direction,
@@ -4119,8 +4167,14 @@ fn dialog_commands(app: &SolveApp, d: &Dialog) -> Result<Vec<(String, Value)>, S
             if sels(d, 0).iter().any(|pick| !matches!(pick, Sel::Face { body: other, .. } if other == body)) {
                 return Err("pick faces of one body".into());
             }
-            let neutral = plane_value(s, sels(d, 1).first()).ok_or("the neutral plane must be a plane or a planar face")?;
-            ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral}))
+            // A straight edge is the hinge (Nuclear's Rotate Face): the faces turn about it.
+            if let Some(edge @ Sel::Edge { .. }) = sels(d, 1).first() {
+                let (pull, neutral) = hinge(app, sels(d, 0), edge)?;
+                ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral, "pull": pt(pull)}))
+            } else {
+                let neutral = plane_value(s, sels(d, 1).first()).ok_or("the neutral plane must be a plane or a planar face")?;
+                ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral}))
+            }
         }
         Kind::Mirror => {
             need(0, "objects")?;

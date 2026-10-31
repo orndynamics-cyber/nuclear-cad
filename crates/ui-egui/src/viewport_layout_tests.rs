@@ -56,7 +56,8 @@ fn render_focus_compass_keeps_clear_of_an_exit_chip_on_either_side() {
 
 #[test]
 fn thin_rotated_bounds_fit_using_the_original_full_projection() {
-    for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 450.0, 2.0), (700.0, 360.0, 2.0), (900.0, 720.0, 1.0)] {
+    // The smallest window leaves the view as tall as 360 did before Nuclear's 14 pt taller ribbon.
+    for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 450.0, 2.0), (700.0, 374.0, 2.0), (900.0, 720.0, 1.0)] {
         let vp = Rect::from_min_max(pos2(250.0, crate::toolbar::APP_BAR_HEIGHT + crate::toolbar::RIBBON_HEIGHT), pos2(width, height - 30.0));
         let dock = Rect::from_min_max(pos2(width - 205.0, vp.top()), vp.max);
         let layout = layout(vp, &[dock], scale, crate::prefs::NavigatorStyle::Axes, true);
@@ -301,7 +302,8 @@ fn immediate_standard_view_cancels_fit_before_the_measured_frame() {
 
 #[test]
 fn navigation_anchors_ignore_positioned_resized_and_covering_dialogs() {
-    for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 450.0, 2.0), (700.0, 360.0, 2.0)] {
+    // The smallest window leaves the view as tall as 360 did before Nuclear's 14 pt taller ribbon.
+    for (width, height, scale) in [(1400.0, 900.0, 1.0), (700.0, 450.0, 2.0), (700.0, 374.0, 2.0)] {
         let vp = Rect::from_min_max(pos2(250.0, crate::toolbar::APP_BAR_HEIGHT + crate::toolbar::RIBBON_HEIGHT), pos2(width, height - 30.0));
         let baseline = layout(vp, &[], scale, crate::prefs::NavigatorStyle::Axes, true);
         assert!(baseline.axis_view.is_positive() && baseline.navigation.is_positive());
@@ -459,6 +461,8 @@ fn tiny_viewports_never_overlap_navigation_and_axis_view() {
 fn floating_fit_uses_the_measured_browser_and_history_cards_at_each_size() {
     for (width, height) in [(1400, 900), (900, 720), (700, 475)] {
         let mut h = Harness::new();
+        // The floating cards (the layout before Nuclear's docked default).
+        h.call("ui.set", json!({"layout":"floating"}));
         h.call("ui.resize", json!({"width":width,"height":height}));
         h.app.run("solid.box", json!({"length":40,"width":30,"height":20})).unwrap();
         h.settle();

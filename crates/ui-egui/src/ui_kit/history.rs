@@ -7,6 +7,24 @@ use egui::{Painter, Rect, Stroke, pos2, vec2};
 
 /// Browser and named history rows use the same density.
 pub(crate) const TREE_ROW_HEIGHT: f32 = 26.0;
+/// The rows at the Nuclear density: room for larger names and icons.
+const NUCLEAR_TREE_ROW_HEIGHT: f32 = 32.0;
+
+/// The Browser's and named history's row height drawn now.
+pub(crate) fn tree_row_height() -> f32 {
+    if crate::toolbar::nuclear_hud() { NUCLEAR_TREE_ROW_HEIGHT } else { TREE_ROW_HEIGHT }
+}
+
+/// How far each level of a full-size tree row is indented now: deeper in Nuclear's roomier tree.
+pub(crate) fn tree_indent() -> f32 {
+    if crate::toolbar::nuclear_hud() { 18.0 } else { 14.0 }
+}
+
+/// A full-size tree row's icon side now (20 pt in Nuclear's tree); the label starts this plus a
+/// gap after it.
+pub(crate) fn tree_icon_side() -> f32 {
+    if crate::toolbar::nuclear_hud() { 20.0 } else { Tokens::get().space_16 }
+}
 
 /// Shared bottom-strip title: History's typography, centred baseline and trailing gap.
 pub(crate) struct StripHeading(std::sync::Arc<egui::Galley>);
@@ -49,7 +67,7 @@ impl HistoryStyle {
         match self {
             Self::Bottom => t.control_height,
             Self::Icons => t.control_height + t.space_10,
-            Self::Names => TREE_ROW_HEIGHT,
+            Self::Names => tree_row_height(),
         }
     }
 }
@@ -307,7 +325,7 @@ impl HistorySeam {
     pub fn new(card: Rect) -> Self {
         let t = Tokens::get();
         Self {
-            grip: Rect::from_center_size(pos2(card.right() - t.space_2 - t.space_3 / 2.0, card.center().y), vec2(t.space_3, TREE_ROW_HEIGHT)),
+            grip: Rect::from_center_size(pos2(card.right() - t.space_2 - t.space_3 / 2.0, card.center().y), vec2(t.space_3, tree_row_height())),
             pill: Rect::from_center_size(card.right_center(), vec2(t.space_16 + t.space_2, t.control_height + t.space_16)),
             edge: Rect::from_min_max(pos2(card.right() - t.space_10, card.top()), card.right_bottom()),
         }

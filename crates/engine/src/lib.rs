@@ -19,6 +19,7 @@ pub mod crash;
 pub mod easyprint;
 pub mod frames;
 pub mod fuzz;
+pub mod library;
 pub mod licences;
 pub mod occurrences;
 pub mod params;

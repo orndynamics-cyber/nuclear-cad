@@ -151,6 +151,9 @@ fn inch_pattern_arrows_follow_bare_primary_and_secondary_distances() {
 #[test]
 fn a_solid_pattern_spacing_arrow_dragged_past_zero_goes_negative() {
     let mut h = Harness::new();
+    // Nuclear's docked layout: under its taller ribbon the floating cards would catch the
+    // drag's end before the arrow gets there.
+    h.call("ui.set", json!({"layout":"docked"}));
     h.run(&json!([
         {"call": "engine.execute", "params": {"command": "solid.box", "params": {"length": 10, "width": 10, "height": 10}}},
         {"call": "ui.view", "params": {"view": "iso"}},

@@ -123,11 +123,13 @@ pub(crate) fn ago(secs: u64) -> String {
 }
 
 pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
+    confirm_discard(app, ctx);
     // File view presents the same entries inline, without a second window covering them.
     if app.home.open || app.recoverable.is_empty() {
         return;
     }
     let mut act: Option<(Entry, bool)> = None;
+    let mut copy: Option<Entry> = None;
     let (closed, action) = ui_kit::Window::new(egui::Id::new("sc_recover_prompt"), "restore", crate::i18n::tr_label("Recover unsaved design?"))
         .actions("", crate::i18n::tr_label("Later"), None)
         .show(ctx, true, |ui| {
@@ -142,6 +144,9 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
                     if ui_kit::button(ui, crate::i18n::tr_label("Recover"), ui_kit::Button::Normal).clicked() {
                         act = Some((e.clone(), true));
                     }
+                    if ui_kit::button(ui, crate::i18n::tr_label("Open as Copy"), ui_kit::Button::Normal).clicked() {
+                        copy = Some(e.clone());
+                    }
                     if ui_kit::button(ui, crate::i18n::tr_label("Discard"), ui_kit::Button::Normal).clicked() {
                         act = Some((e.clone(), false));
                     }
@@ -153,12 +158,54 @@ pub fn show(app: &mut SolveApp, ctx: &egui::Context) {
             }
         });
     let later = closed || action != ui_kit::Action::None;
-    if let Some((entry, recover)) = act {
-        apply(app, entry, recover);
+    match (act, copy) {
+        (Some((entry, true)), _) => apply(app, entry, true),
+        (Some((entry, false)), _) => ask_discard(app, entry),
+        (None, Some(entry)) => apply_copy(app, entry),
+        (None, None) => {}
     }
     if later {
         app.recoverable.clear();
     }
+}
+
+/// Discard asks first: it deletes the unsaved work for good.
+pub(crate) fn ask_discard(app: &mut SolveApp, entry: Entry) {
+    app.home.discard_recovery = Some(entry);
+}
+
+/// The confirmation a Discard waits for; Cancel keeps the entry offered.
+fn confirm_discard(app: &mut SolveApp, ctx: &egui::Context) {
+    let Some(entry) = app.home.discard_recovery.clone() else { return };
+    let (closed, action) = ui_kit::Confirm::new(egui::Id::new("sc_recovery_discard"), "delete", crate::i18n::tr_label("Discard unsaved work?"))
+        .tone(ui_kit::Tone::Danger)
+        .actions("Discard", "Cancel", None)
+        .show(ctx, true, |ui| {
+            let text = crate::i18n::format("recovery.discard_confirm", &[("name", &entry.name)]);
+            ui_kit::text(ui, &text, ui_kit::Text::Report("discard", false));
+        });
+    match action {
+        ui_kit::Action::Ok => {
+            app.home.discard_recovery = None;
+            apply(app, entry, false);
+        }
+        _ if closed || action == ui_kit::Action::Cancel => app.home.discard_recovery = None,
+        _ => {}
+    }
+}
+
+/// Recover as an untitled copy: the same work, but Save asks where to put it, so the original
+/// file is never overwritten by it.
+pub(crate) fn apply_copy(app: &mut SolveApp, entry: Entry) {
+    if app.session.is_dirty() {
+        app.set_status("save or discard the open design's changes before recovering another", true);
+        return;
+    }
+    let dir_s = app.autosave.as_ref().map(|a| a.dir.clone()).or_else(recovery::default_dir).map(|d| d.to_string_lossy().to_string());
+    app.recoverable.retain(|x| x.id != entry.id);
+    let mut request = crate::file_load::Request::new(&entry.name, crate::file_load::Kind::Recover { id: entry.id.clone(), dir: dir_s });
+    request.options.insert("copy".into(), json!(true));
+    let _ = crate::file_load::begin_request(app, request);
 }
 
 /// Shared recovery action for the launch prompt and File view; dirty work is never replaced.
@@ -456,6 +503,50 @@ mod tests {
 
     fn entry(id: &str, name: &str) -> Entry {
         Entry { id: id.into(), path: None, name: name.into(), saved_at: 0, features: 3 }
+    }
+
+    /// Open as Copy recovers the work as an untitled design (Save asks where), so the original file
+    /// is never its target; Discard asks first and Cancel keeps the entry offered.
+    #[test]
+    fn open_as_copy_leaves_the_original_and_discard_asks_first() {
+        let (mut a, dir) = app("copy", Duration::ZERO);
+        let original = dir.with_extension("original.solidcraft");
+        edit(&mut a);
+        a.run("file.save", json!({"path": original})).unwrap();
+        let saved = fs::read(&original).unwrap();
+        a.run("solid.cylinder", json!({"radius": 2, "height": 4, "base": [30, 0, 0], "operation": "new"})).unwrap();
+        a.big_operation = false;
+        let expected = a.session.doc.clone();
+        tick_and_wait(&mut a);
+        drop(a); // A crash: the entry stays.
+
+        let mut h = crate::scenario::Harness::new();
+        h.app.home.open = false;
+        start(&mut h.app, &dir, Duration::ZERO);
+        assert_eq!(h.app.recoverable.len(), 1);
+        h.frames(3);
+        h.step(&json!({"widget": "Discard"})).unwrap();
+        h.frames(2);
+        assert!(h.app.home.discard_recovery.is_some(), "Discard asks before deleting the work");
+        h.step(&json!({"widget": "Cancel"})).unwrap();
+        h.frames(2);
+        assert!(h.app.home.discard_recovery.is_none());
+        assert_eq!(h.app.recoverable.len(), 1, "Cancel keeps the entry offered");
+
+        h.step(&json!({"widget": "Open as Copy"})).unwrap();
+        for _ in 0..600 {
+            h.frames(1);
+            if !h.app.file_load.busy() && h.app.session.doc.features.len() == expected.features.len() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.app.session.doc.features.len(), expected.features.len(), "the recovered work is open");
+        assert!(h.app.session.path.is_none(), "a copy is untitled: Save asks where");
+        assert_eq!(fs::read(&original).unwrap(), saved, "the original file is untouched");
+        drop(h);
+        let _ = fs::remove_file(original);
+        let _ = fs::remove_dir_all(dir);
     }
 
     #[test]

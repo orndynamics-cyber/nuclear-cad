@@ -392,6 +392,10 @@ fn reoffer(app: &mut SolveApp, id: &str, dir: Option<&str>) {
 /// A recovered design is ours now: autosave it under this app's entry before the old one goes.
 fn recovered(app: &mut SolveApp, request: &Request) {
     let Kind::Recover { id, dir } = &request.kind else { return };
+    // Open as Copy: an untitled design, so Save asks where and the original stays as it was.
+    if request.options.get("copy").and_then(Value::as_bool) == Some(true) {
+        app.session.path = None;
+    }
     let kept = app.autosave.as_mut().map(|a| a.save(&app.session));
     if let Some(Ok(_)) = kept {
         let _ = app.session.execute("doc.recovery_discard", &json!({"id": id, "dir": dir}));

@@ -1,0 +1,46 @@
+{
+  "en": {
+    "prefs.sketch_reference_snap": "Reference snaps and inference guides",
+    "prefs.sketch_reference_snap_note": "While drawing, the cursor sticks to points, midpoints, crossings, tangents, perpendiculars and curves, and the click keeps that relation. Points you rest on are tracked: move away from one horizontally, vertically or at 45° to follow a dashed guide aligned with it. Hold Ctrl (Cmd) to draw freely. Off: the classic snap."
+  },
+  "pt-BR": {
+    "prefs.sketch_reference_snap": "Aquisição de referências e linhas-guia de inferência",
+    "prefs.sketch_reference_snap_note": "Ao desenhar, o cursor gruda em pontos, pontos médios, interseções, tangentes, perpendiculares e curvas, e o clique guarda essa relação. Os pontos em que o cursor descansa ficam rastreados: afaste-se de um na horizontal, na vertical ou a 45° para seguir uma linha-guia tracejada alinhada a ele. Segure Ctrl (Cmd) para desenhar livremente. Desligado: o snap clássico."
+  },
+  "ru": {
+    "prefs.sketch_reference_snap": "Привязка к опорным точкам и направляющие",
+    "prefs.sketch_reference_snap_note": "При рисовании курсор прилипает к точкам, серединам, пересечениям, касательным, перпендикулярам и кривым, а щелчок сохраняет эту связь. Точки, на которых задержался курсор, отслеживаются: отведите курсор от такой точки по горизонтали, вертикали или под 45°, чтобы следовать пунктирной направляющей, выровненной по ней. Удерживайте Ctrl (Cmd), чтобы рисовать свободно. Выкл.: классическая привязка."
+  },
+  "ar": {
+    "prefs.sketch_reference_snap": "الالتقاط المرجعي وخطوط الاستدلال الإرشادية",
+    "prefs.sketch_reference_snap_note": "أثناء الرسم يلتصق المؤشر بالنقاط ونقاط المنتصف والتقاطعات والمماسات والأعمدة والمنحنيات، وتحتفظ النقرة بتلك العلاقة. تُتتبَّع النقاط التي يستقر عليها المؤشر: ابتعد عن إحداها أفقيًا أو رأسيًا أو بزاوية 45° لتتبع خطًا إرشاديًا متقطعًا محاذيًا لها. اضغط Ctrl (Cmd) مع الاستمرار للرسم بحرية. إيقاف: الالتقاط التقليدي."
+  },
+  "de": {
+    "prefs.sketch_reference_snap": "Referenzfang und Ausrichtungshilfslinien",
+    "prefs.sketch_reference_snap_note": "Beim Zeichnen rastet der Zeiger an Punkten, Mittelpunkten, Schnittpunkten, Tangenten, Loten und Kurven ein, und der Klick behält diese Beziehung bei. Punkte, auf denen der Zeiger verweilt, werden verfolgt: Waagerecht, senkrecht oder unter 45° davon wegbewegen, um einer daran ausgerichteten gestrichelten Hilfslinie zu folgen. Strg (Cmd) halten, um frei zu zeichnen. Aus: der klassische Fang."
+  },
+  "he": {
+    "prefs.sketch_reference_snap": "הצמדה לנקודות ייחוס וקווי עזר להסקה",
+    "prefs.sketch_reference_snap_note": "בזמן השרטוט הסמן נצמד לנקודות, לנקודות אמצע, לחיתוכים, למשיקים, לאנכים ולעקומות, והלחיצה שומרת את הקשר הזה. נקודות שהסמן נח עליהן נעקבות: התרחקו מאחת מהן אופקית, אנכית או ב־45° כדי לעקוב אחר קו עזר מקווקו המיושר אליה. החזיקו Ctrl (Cmd) כדי לשרטט בחופשיות. כבוי: ההצמדה הקלאסית."
+  },
+  "ja": {
+    "prefs.sketch_reference_snap": "参照スナップと推論ガイド",
+    "prefs.sketch_reference_snap_note": "描画中、カーソルは点、中点、交点、接線、垂線、曲線にスナップし、クリックするとその関係が保持されます。カーソルを止めた点は追跡されます。その点から水平・垂直・45°方向に離れると、その点に揃った破線ガイドに沿って移動します。Ctrl（Cmd）を押している間は自由に描画できます。オフ: 従来のスナップ。"
+  },
+  "ko": {
+    "prefs.sketch_reference_snap": "참조 스냅과 추론 안내선",
+    "prefs.sketch_reference_snap_note": "그리는 동안 커서가 점, 중점, 교차점, 접선, 수선, 곡선에 붙고 클릭하면 그 관계가 유지됩니다. 커서가 머문 점은 추적됩니다. 그 점에서 수평, 수직 또는 45° 방향으로 멀어지면 그 점에 맞춘 점선 안내선을 따라갑니다. 자유롭게 그리려면 Ctrl(Cmd)을 누르세요. 끄기: 기존 스냅."
+  },
+  "vi": {
+    "prefs.sketch_reference_snap": "Bắt điểm tham chiếu và đường dẫn suy luận",
+    "prefs.sketch_reference_snap_note": "Khi vẽ, con trỏ bám vào điểm, trung điểm, giao điểm, tiếp tuyến, đường vuông góc và đường cong, và cú nhấp giữ lại quan hệ đó. Các điểm con trỏ dừng lại sẽ được theo dõi: di chuyển ra xa một điểm theo phương ngang, dọc hoặc 45° để đi theo đường dẫn nét đứt thẳng hàng với nó. Giữ Ctrl (Cmd) để vẽ tự do. Tắt: bắt điểm cổ điển."
+  },
+  "zh": {
+    "prefs.sketch_reference_snap": "参考捕捉与推断辅助线",
+    "prefs.sketch_reference_snap_note": "绘制时，光标会吸附到点、中点、交点、切点、垂足和曲线上，单击会保留该关系。光标停留过的点会被追踪：从该点沿水平、竖直或 45° 方向移开，即可沿与其对齐的虚线辅助线移动。按住 Ctrl（Cmd）可自由绘制。关闭：经典捕捉。"
+  },
+  "zh-TW": {
+    "prefs.sketch_reference_snap": "參考鎖點與推斷輔助線",
+    "prefs.sketch_reference_snap_note": "繪製時，游標會吸附到點、中點、交點、切點、垂足和曲線上，按一下會保留該關係。游標停留過的點會被追蹤：從該點沿水平、垂直或 45° 方向移開，即可沿與其對齊的虛線輔助線移動。按住 Ctrl（Cmd）可自由繪製。關閉：傳統鎖點。"
+  }
+}

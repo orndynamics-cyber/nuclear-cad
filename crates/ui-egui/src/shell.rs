@@ -9,8 +9,10 @@ use crate::{SolveApp, theme::Tokens, toolbar};
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum LayoutMode {
-    #[default]
+    /// Cards floating over the view, with gaps round them (the layout before Nuclear's HUD).
     Floating,
+    /// Panels docked flush to the window's edges: Nuclear's default.
+    #[default]
     #[serde(rename = "compact", alias = "docked")]
     Docked,
 }
@@ -20,8 +22,10 @@ impl LayoutMode {
         ctx.data_mut(|data| data.insert_temp(egui::Id::new("sc_container_layout"), self));
     }
 
+    /// The layout the app published this frame. A context the app never drew in (a widget on
+    /// its own) gets the floating cards, which every widget's own geometry is written for.
     pub(crate) fn current(ctx: &egui::Context) -> Self {
-        ctx.data(|data| data.get_temp(egui::Id::new("sc_container_layout"))).unwrap_or_default()
+        ctx.data(|data| data.get_temp(egui::Id::new("sc_container_layout"))).unwrap_or(LayoutMode::Floating)
     }
 }
 

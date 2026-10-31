@@ -194,6 +194,13 @@ impl Harness {
             cam_mark: None,
         };
         WIDTHS.with(|m| m.borrow_mut().clear());
+        // Scenarios keep the floating cards their measured geometry was written for; Nuclear's
+        // docked default is exercised by the scenarios that ask for it (`ui.set` `layout`).
+        h.app.preferences.layout = crate::shell::LayoutMode::Floating;
+        h.app.ui.layout = crate::shell::LayoutMode::Floating;
+        // And the earlier density, so the tests' window geometry stays put; the large Nuclear
+        // HUD has its own tests.
+        h.app.preferences.toolbar_density = crate::toolbar::Density::Comfortable;
         h.install();
         h.ctx.enable_accesskit();
         h.frames(3);

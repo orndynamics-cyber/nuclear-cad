@@ -4,6 +4,7 @@ use crate::fonts::RichTextExt as _;
 use crate::icons::glyphs::pin_icon;
 use crate::ui_kit::{self, Container, Edge, Surface};
 use egui::{Align2, Color32, FontId, Rect, Sense, Stroke, pos2, vec2};
+use serde::Serialize;
 use serde_json::json;
 
 use crate::theme::Tokens;
@@ -85,7 +86,7 @@ impl Plan {
 
 /// A panel's width with these individual button widths.
 pub fn panel_width(buttons: &[f32]) -> f32 {
-    (buttons.iter().sum::<f32>() + buttons.len().saturating_sub(1) as f32 * BUTTON_GAP + 8.0).max(COLLAPSED_WIDTH)
+    (buttons.iter().sum::<f32>() + buttons.len().saturating_sub(1) as f32 * BUTTON_GAP + metrics().panel_padding).max(COLLAPSED_WIDTH)
 }
 
 /// A collapsed panel's width: one button's panel.
@@ -93,29 +94,207 @@ pub const COLLAPSED_WIDTH: f32 = 72.0;
 
 /// The gap after each panel (its separator).
 const PANEL_GAP: f32 = 1.0;
-pub const TAB_ROW_HEIGHT: f32 = 30.0;
+/// The workspace tabs' row: roomy, like the document tabs above it (Nuclear's HUD).
+pub const TAB_ROW_HEIGHT: f32 = 36.0;
+/// The tab row at the Nuclear (large) density, which also holds the workspace drop-down.
+const NUCLEAR_TAB_ROW_HEIGHT: f32 = 40.0;
 /// Distance from the ribbon card's edges to the first tab and the search field.
 const RIBBON_TAB_INSET: f32 = 4.0;
-pub const GROUP_HEIGHT: f32 = 86.0;
+/// The labelled ribbon's group height at the default (comfortable) density.
+pub const GROUP_HEIGHT: f32 = COMFORTABLE.group;
 pub const RIBBON_HEIGHT: f32 = TAB_ROW_HEIGHT + GROUP_HEIGHT + 1.0;
 pub(crate) const WORKSPACE_WIDTH: f32 = 88.0;
-const BUTTON_HEIGHT: f32 = 60.0;
-const ICON_BUTTON_HEIGHT: f32 = 36.0;
-const ICON_GROUP_HEIGHT: f32 = 62.0;
+/// The docked workspace switcher's room around its name: icon, gaps and drop-down arrow.
+const DOCKED_SWITCHER_PADDING: f32 = 64.0;
+/// The docked ribbon's command groups start this far from the window's left edge.
+const DOCKED_RIBBON_INSET: f32 = 8.0;
+
+/// How roomy the ribbon is (Preferences › Interface › Toolbar density).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Density {
+    /// Nuclear's HUD: large artwork, a compact workspace drop-down on the tab row, and a roomier
+    /// Browser and History.
+    #[default]
+    Nuclear,
+    /// Larger icons and click targets, readable short labels (the earlier default).
+    Comfortable,
+    /// The tighter ribbon, for small displays and experienced users.
+    Compact,
+}
+
+impl Density {
+    pub const ALL: [Density; 3] = [Density::Nuclear, Density::Comfortable, Density::Compact];
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Density::Nuclear => "nuclear",
+            Density::Comfortable => "comfortable",
+            Density::Compact => "compact",
+        }
+    }
+
+    pub fn from_id(id: &str) -> Option<Density> {
+        Density::ALL.into_iter().find(|d| d.id() == id)
+    }
+
+    pub fn label_id(self) -> &'static str {
+        match self {
+            Density::Nuclear => "prefs.density_nuclear",
+            Density::Comfortable => "prefs.density_comfortable",
+            Density::Compact => "prefs.density_compact",
+        }
+    }
+
+    fn metrics(self) -> Metrics {
+        match self {
+            Density::Nuclear => NUCLEAR,
+            Density::Comfortable => COMFORTABLE,
+            Density::Compact => COMPACT,
+        }
+    }
+}
+
+/// From saved preferences: an unknown value is Nuclear's default.
+impl<'de> serde::Deserialize<'de> for Density {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = serde_json::Value::deserialize(d)?;
+        Ok(v.as_str().and_then(Density::from_id).unwrap_or_default())
+    }
+}
+
+/// Ribbon sizes, in logical points, at one density.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Metrics {
+    /// A labelled button's height and its panel's (with the 20 point label row).
+    button: f32,
+    group: f32,
+    /// An icon-only button's height, its panel's and an icon-only button's width.
+    icon_button: f32,
+    icon_group: f32,
+    icon_width: f32,
+    /// Command artwork, and where a label starts below the button's top edge.
+    icon: f32,
+    label_top: f32,
+    /// The command labels' text size (never below the theme's body text).
+    label: f32,
+    /// The narrowest and widest a labelled button gets, its label's side padding, and the room
+    /// a panel keeps round its buttons (inside its separators).
+    min_width: f32,
+    max_width: f32,
+    label_padding: f32,
+    panel_padding: f32,
+    /// The group names' text size under the buttons (0: the theme's caption size).
+    section: f32,
+}
+
+/// The Nuclear ribbon (#nuclear-hud): 48 point artwork on 90 point buttons, 76 to 104 wide, with
+/// 14.5 point labels and 13 point group names, so the commands read at a glance and use the
+/// toolbar's width.
+const NUCLEAR: Metrics = Metrics {
+    button: 90.0,
+    group: 118.0,
+    icon_button: 60.0,
+    icon_group: 86.0,
+    icon_width: 60.0,
+    icon: 48.0,
+    label_top: 58.0,
+    label: 14.5,
+    min_width: 76.0,
+    max_width: 104.0,
+    label_padding: 16.0,
+    panel_padding: 8.0,
+    section: 13.0,
+};
+/// The earlier Nuclear ribbon: 34 point artwork on 74 point buttons, 64 to 88 wide, with 13.5
+/// point labels.
+const COMFORTABLE: Metrics = Metrics {
+    button: 74.0,
+    group: 100.0,
+    icon_button: 52.0,
+    icon_group: 78.0,
+    icon_width: 52.0,
+    icon: 34.0,
+    label_top: 44.0,
+    label: 13.5,
+    min_width: 64.0,
+    max_width: 88.0,
+    label_padding: 14.0,
+    panel_padding: 8.0,
+    section: 0.0,
+};
+const COMPACT: Metrics = Metrics {
+    button: 60.0,
+    group: 86.0,
+    icon_button: 36.0,
+    icon_group: 62.0,
+    icon_width: 40.0,
+    icon: 26.0,
+    label_top: 32.0,
+    label: 0.0,
+    min_width: 54.0,
+    max_width: 76.0,
+    label_padding: 10.0,
+    panel_padding: 8.0,
+    section: 0.0,
+};
+
+thread_local! {
+    /// The density drawn now, per UI thread like the theme (set each frame from preferences).
+    static DENSITY: std::cell::Cell<Density> = const { std::cell::Cell::new(Density::Comfortable) };
+}
+
+/// Windows shorter than this (logical points) draw the compact ribbon at either density.
+pub const SHORT_WINDOW: f32 = 600.0;
+
+/// Draw the ribbon at this density from the next frame.
+pub fn set_density(density: Density) {
+    DENSITY.set(density);
+}
+
+fn metrics() -> Metrics {
+    DENSITY.get().metrics()
+}
+
+/// Whether Nuclear's large HUD is drawn now: the taller bars, the tab-row workspace drop-down and
+/// the roomier Browser and History. The Comfortable and Compact densities keep the earlier look.
+pub(crate) fn nuclear_hud() -> bool {
+    DENSITY.get() == Density::Nuclear
+}
+
+/// The workspace tabs' row height drawn now.
+pub(crate) fn tab_row_height() -> f32 {
+    if nuclear_hud() { NUCLEAR_TAB_ROW_HEIGHT } else { TAB_ROW_HEIGHT }
+}
+
+/// The application bar's height drawn now.
+pub(crate) fn app_bar_height() -> f32 {
+    if nuclear_hud() { NUCLEAR_APP_BAR_HEIGHT } else { APP_BAR_HEIGHT }
+}
+
+/// The command labels' text size at the density drawn now.
+fn label_size() -> f32 {
+    crate::theme::Tokens::get().font_body.max(metrics().label)
+}
 
 /// The same height drives shell reservations and ribbon painting in either layout.
 pub(crate) fn ribbon_height(labels: bool) -> f32 {
-    if labels { RIBBON_HEIGHT } else { TAB_ROW_HEIGHT + ICON_GROUP_HEIGHT + 1.0 }
+    let m = metrics();
+    tab_row_height() + if labels { m.group } else { m.icon_group } + 1.0
 }
 const BUTTON_GAP: f32 = 3.0;
-const BUTTON_MIN_WIDTH: f32 = 54.0;
-const BUTTON_MAX_WIDTH: f32 = 76.0;
-const BUTTON_LABEL_PADDING: f32 = 10.0;
-/// Where a button's label starts below the button's top edge, under its icon.
-const BUTTON_LABEL_TOP: f32 = 32.0;
+/// The default (comfortable) density's button limits, which the tests size their panels with.
+#[cfg(test)]
+const BUTTON_MIN_WIDTH: f32 = COMFORTABLE.min_width;
+#[cfg(test)]
+const BUTTON_MAX_WIDTH: f32 = COMFORTABLE.max_width;
+#[cfg(test)]
+const BUTTON_LABEL_PADDING: f32 = COMFORTABLE.label_padding;
 /// Room kept below a button's label, inside its highlight.
 const BUTTON_LABEL_BOTTOM: f32 = 2.0;
 const SECTION_HEIGHT: f32 = 20.0;
+/// The group names' row at the Nuclear density, for their larger text.
+const NUCLEAR_SECTION_HEIGHT: f32 = 22.0;
 
 /// The » button's room at the end of the panels, kept only while some panel is in it.
 pub const MORE_ROOM: f32 = 40.0;
@@ -145,6 +324,14 @@ pub fn fit(panels: &[PanelSize], room: f32) -> Vec<Plan> {
     panels.iter().map(|_| Plan::more()).collect()
 }
 
+/// The recommended tools' panel in the room the other panels leave (`room_left`): as many of
+/// its buttons as fit, or the » menu when none does. It never takes room from the others.
+fn recommended_plan(panel: &PanelSize, room_left: f32) -> Plan {
+    let widths: Vec<f32> = panel.buttons.iter().map(|b| b.width).collect();
+    let shown = (1..=widths.len()).rev().find(|k| panel_width(widths.get(..*k).unwrap_or_default()) + PANEL_GAP <= room_left).unwrap_or(0);
+    if shown == 0 { Plan::more() } else { Plan { fit: Fit::Buttons, shown, widths } }
+}
+
 /// The room plans take on the toolbar (each panel and its separator).
 fn used(plans: &[Plan]) -> f32 {
     plans.iter().filter(|p| p.fit != Fit::More).map(|p| p.width() + PANEL_GAP).sum()
@@ -159,7 +346,8 @@ fn shrink(panels: &[PanelSize], room: f32) -> Option<Vec<Plan>> {
     }
     // 1. Narrow together in one-pixel steps, keeping each button's measured width until it
     // reaches its minimum. The gallery's minimum equals its full width.
-    for reduction in 1..=((BUTTON_MAX_WIDTH - BUTTON_MIN_WIDTH) as usize) {
+    let m = metrics();
+    for reduction in 1..=((m.max_width - m.min_width) as usize) {
         for (plan, panel) in plans.iter_mut().zip(panels) {
             for (width, button) in plan.widths.iter_mut().zip(&panel.buttons) {
                 *width = (button.width - reduction as f32).max(button.min_width);
@@ -299,13 +487,17 @@ pub(crate) fn offer_pill(
 const REPORT_TEXT_X: f32 = 29.0;
 
 /// The application bar's height: the window's title bar on desktop builds.
-pub const APP_BAR_HEIGHT: f32 = 34.0;
+pub const APP_BAR_HEIGHT: f32 = 44.0;
+/// The application bar at the Nuclear density, with room for the wordmark.
+const NUCLEAR_APP_BAR_HEIGHT: f32 = 48.0;
+/// The NUCLEAR wordmark's text size in the application bar.
+const WORDMARK_SIZE: f32 = 16.0;
 
 pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
     let t = Tokens::get();
     let app_bar = Container::new(ui.ctx(), Surface::ApplicationBar).edge("sc_appbar", Edge::Top);
     let frame = Container::new(ui.ctx(), Surface::ApplicationBar).edge_frame(t.app_bar);
-    app_bar.exact_size(APP_BAR_HEIGHT).show_separator_line(false).frame(frame).show(ui, |ui| {
+    app_bar.exact_size(app_bar_height()).show_separator_line(false).frame(frame).show(ui, |ui| {
         let r = ui.max_rect();
         // The bar is the window's title bar: its empty space moves the window.
         if app.custom_titlebar || app.integrated_titlebar {
@@ -319,7 +511,8 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
             let c = pos2(left + 20.0, r.center().y);
             crate::icons::glyphs::brand_mark(ui.painter(), c);
         }
-        if !compact_actions {
+        let wordmark = nuclear_hud();
+        if !compact_actions && !wordmark {
             ui.painter().text(
                 pos2(left + 36.0, r.center().y),
                 Align2::LEFT_CENTER,
@@ -327,8 +520,30 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 crate::fonts::semibold(t.font_heading),
                 t.app_bar_text,
             );
+        } else if !compact_actions {
+            // The wordmark: NUCLEAR in spaced capitals, as in the approved reference.
+            let mut job = egui::text::LayoutJob::default();
+            job.append(
+                "NUCLEAR",
+                0.0,
+                egui::TextFormat {
+                    font_id: crate::fonts::semibold(WORDMARK_SIZE),
+                    color: t.app_bar_text,
+                    extra_letter_spacing: 2.0,
+                    ..Default::default()
+                },
+            );
+            let galley = ui.painter().layout_job(job);
+            ui.painter().galley(pos2(left + 38.0, r.center().y - galley.size().y / 2.0), galley, t.app_bar_text);
         }
-        let mut x = left + if compact_actions { 56.0 } else { 128.0 };
+        let mut x = left
+            + if compact_actions {
+                56.0
+            } else if wordmark {
+                160.0
+            } else {
+                128.0
+            };
         let home = Rect::from_center_size(pos2(x - 4.0, r.center().y), vec2(32.0, 32.0));
         let idle = !app.file_load.busy();
         let home_response = ui.interact(home, ui.id().with("appbar_home"), if idle { Sense::click() } else { Sense::hover() });
@@ -512,7 +727,7 @@ pub fn app_bar(app: &mut SolveApp, ui: &mut egui::Ui) {
     });
     file_menu(app, ui.ctx());
     let help_x = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new("sc_help_anchor")).unwrap_or(300.0));
-    crate::help::show(app, &ui.ctx().clone(), pos2(help_x - 14.0, APP_BAR_HEIGHT));
+    crate::help::show(app, &ui.ctx().clone(), pos2(help_x - 14.0, app_bar_height()));
 }
 
 /// File, edit and application actions shared by the in-window and native menus.
@@ -621,7 +836,7 @@ fn file_menu(app: &mut SolveApp, ctx: &egui::Context) {
     let mut close = false;
     let resp = Container::new(ctx, Surface::Popup)
         .area(egui::Id::new("sc_file_area"))
-        .fixed_pos(pos2(ctx.data(|d| d.get_temp::<f32>(egui::Id::new("sc_file_menu_x"))).unwrap_or(100.0), APP_BAR_HEIGHT))
+        .fixed_pos(pos2(ctx.data(|d| d.get_temp::<f32>(egui::Id::new("sc_file_menu_x"))).unwrap_or(100.0), app_bar_height()))
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
             crate::ui_kit::Menu::show_frame(ui, crate::ui_kit::Menu::frame(), |ui| {
@@ -810,6 +1025,11 @@ fn save_as_named(app: &mut SolveApp, name: &str, extension: &str) {
     let name = format!("{name}.{extension}");
     app.pick_save(&name, &[solidcraft_engine::io::DESIGN_EXT, "json"], |app, path| {
         // A save under way answers a closing tab when it ends.
+        // A design saved for the first time keeps one identity from now on, whatever it is
+        // renamed or moved to (`solidcraft_engine::library::DOCUMENT_ID`).
+        if path.is_some() && solidcraft_engine::library::document_id(&app.session.doc).is_none() {
+            solidcraft_engine::library::ensure_document_id(std::sync::Arc::make_mut(&mut app.session.doc));
+        }
         if let Some(path) = path
             && crate::save_job::start(app, "file.save_as", json!({"path": path}))
         {
@@ -880,18 +1100,29 @@ fn ribbon_button_lines(painter: &egui::Painter, label: &str, width: f32) -> Vec<
 }
 
 fn ribbon_label_width(painter: &egui::Painter, text: &str) -> f32 {
-    let mut job =
-        egui::text::LayoutJob::simple(text.to_owned(), FontId::proportional(crate::theme::Tokens::get().font_body), Color32::WHITE, f32::INFINITY);
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), FontId::proportional(label_size()), Color32::WHITE, f32::INFINITY);
     job.halign = egui::Align::Center;
     painter.layout_job(job).size().x
 }
 
 fn ribbon_button_width(painter: &egui::Painter, label: &str) -> f32 {
-    let widest = ribbon_label_lines(painter, label, BUTTON_MAX_WIDTH - BUTTON_LABEL_PADDING)
+    let m = metrics();
+    let widest = ribbon_label_lines(painter, label, m.max_width - m.label_padding)
         .iter()
         .map(|line| ribbon_label_width(painter, line))
         .fold(0.0_f32, f32::max);
-    (widest + BUTTON_LABEL_PADDING).clamp(BUTTON_MIN_WIDTH, BUTTON_MAX_WIDTH)
+    (widest + m.label_padding).clamp(m.min_width, m.max_width)
+}
+
+/// The narrowest a labelled button may get while the ribbon narrows: its longest word stays
+/// whole, so a crowded ribbon moves buttons into the drop-downs before it cuts a label.
+fn ribbon_button_min_width(painter: &egui::Painter, label: &str) -> f32 {
+    let m = metrics();
+    if label.chars().any(|c| cjk_script(c) != CjkScript::Other) {
+        return m.min_width;
+    }
+    let widest = label.split_whitespace().map(|word| ribbon_label_width(painter, word)).fold(0.0_f32, f32::max);
+    (widest + m.label_padding).clamp(m.min_width, m.max_width)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -988,7 +1219,7 @@ fn ribbon_label_lines(painter: &egui::Painter, label: &str, width: f32) -> Vec<S
 fn ribbon_button_galley(painter: &egui::Painter, label: &str, width: f32, color: Color32) -> std::sync::Arc<egui::Galley> {
     let lines = ribbon_button_lines(painter, label, width);
     // Explicit newlines only: egui must never split an oversized word.
-    let size = crate::theme::Tokens::get().font_body;
+    let size = label_size();
     let mut job = egui::text::LayoutJob::simple(lines.join("\n"), FontId::proportional(size), color, f32::INFINITY);
     job.halign = egui::Align::Center;
     // Two lines sit closer than the font's own spacing, so they fit in the button under its
@@ -1004,7 +1235,7 @@ fn ribbon_button_galley(painter: &egui::Painter, label: &str, width: f32, color:
 /// The top of a button's label, `height` tall, in the button `whole`: below the icon, raised
 /// when it would otherwise run past the button's bottom edge (#8391).
 fn ribbon_label_top(whole: Rect, height: f32) -> f32 {
-    (whole.top() + BUTTON_LABEL_TOP).min(whole.bottom() - BUTTON_LABEL_BOTTOM - height)
+    (whole.top() + metrics().label_top).min(whole.bottom() - BUTTON_LABEL_BOTTOM - height)
 }
 
 /// Ribbon headings use the translated labels, with normal word casing instead of registry caps.
@@ -1052,13 +1283,23 @@ struct RibbonTabStyle {
 fn ribbon_tab_style(t: &Tokens, tab: &str, contextual: bool, active: bool, hovered: bool) -> RibbonTabStyle {
     let accent = crate::theme::TabAccent::for_tab(t, tab);
     let idle = if hovered { t.hover } else { Color32::TRANSPARENT };
+    let nuclear = nuclear_hud();
     let (fill, ink, outline) = match (contextual, active) {
         (true, true) => (accent.color, accent.on_fill(t), Color32::TRANSPARENT),
         (true, false) => (idle, t.text, accent.color),
-        (false, true) => (accent.soft, accent.ink, Color32::TRANSPARENT),
-        (false, false) => (idle, t.text, Color32::TRANSPARENT),
+        (false, true) if !nuclear => (accent.soft, accent.ink, Color32::TRANSPARENT),
+        (false, false) if !nuclear => (idle, t.text, Color32::TRANSPARENT),
+        // Nuclear: the selected tab is plain bright text over its accent underline (drawn by
+        // the tab row); the others are dimmer text, highlighted only while hovered.
+        (false, true) => (Color32::TRANSPARENT, t.text, Color32::TRANSPARENT),
+        (false, false) => (idle, if hovered { t.text } else { t.text_dim }, Color32::TRANSPARENT),
     };
     RibbonTabStyle { fill, ink, outline }
+}
+
+/// The workspace tabs' text size: the heading size, a step above the commands' labels.
+fn workspace_tab_font(t: &Tokens) -> f32 {
+    if nuclear_hud() { t.font_heading + 1.0 } else { t.font_heading }
 }
 
 fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
@@ -1066,10 +1307,7 @@ fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
     let tabs = crate::workspace::visible_tabs(app);
     let widths: Vec<_> = tabs
         .iter()
-        .map(|tab| {
-            ui.painter().layout_no_wrap(ribbon_label(app, tab), crate::fonts::semibold(crate::theme::Tokens::get().font_button), t.text).size().x
-                + 24.0
-        })
+        .map(|tab| ui.painter().layout_no_wrap(ribbon_label(app, tab), crate::fonts::semibold(workspace_tab_font(&t)), t.text).size().x + 32.0)
         .collect();
     let tabs_width: f32 = widths.iter().sum::<f32>()
         + tabs.len().saturating_sub(1) as f32 * 2.0
@@ -1088,7 +1326,7 @@ fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
     let action_width = if render { action_widths.iter().sum::<f32>() + 2.0 * t.space_2 } else { 0.0 };
     let search = Rect::from_min_size(
         pos2(row.right() - search_width - inset - action_width, row.top() + inset),
-        vec2(search_width, TAB_ROW_HEIGHT - 2.0 * inset),
+        vec2(search_width, tab_row_height() - 2.0 * inset),
     );
     if render {
         let mut x = search.right() + t.space_2;
@@ -1125,14 +1363,14 @@ fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
             .auto_shrink([false, false])
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
             .show(ui, |ui| {
-                let (all, _) = ui.allocate_exact_size(vec2(tabs_width, TAB_ROW_HEIGHT), Sense::hover());
+                let (all, _) = ui.allocate_exact_size(vec2(tabs_width, tab_row_height()), Sense::hover());
                 let mut x = all.left();
                 for (tab, width) in tabs.into_iter().zip(widths) {
                     let contextual = contextual_tab(app, tab);
                     if contextual {
                         x += 6.0;
                     }
-                    let tr = Rect::from_min_size(pos2(x, all.top() + inset), vec2(width, TAB_ROW_HEIGHT - 2.0 * inset));
+                    let tr = Rect::from_min_size(pos2(x, all.top() + inset), vec2(width, tab_row_height() - 2.0 * inset));
                     let active = app.ui.tab == tab;
                     if active && changed {
                         ui.scroll_to_rect(tr, Some(egui::Align::Center));
@@ -1141,7 +1379,18 @@ fn ribbon_tabs(app: &mut SolveApp, ui: &mut egui::Ui, row: Rect) {
                     response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, ribbon_label(app, tab)));
                     let style = ribbon_tab_style(&t, tab, contextual, active, response.hovered());
                     ui.painter().rect(tr, corner, style.fill, Stroke::new(1.0, style.outline), egui::StrokeKind::Inside);
-                    ribbon_text(ui, tr.center(), &ribbon_label(app, tab), t.font_button, style.ink, active || contextual);
+                    ribbon_text(ui, tr.center(), &ribbon_label(app, tab), workspace_tab_font(&t), style.ink, active || contextual);
+                    // The active workspace: an accent line along the tab's foot, as on the
+                    // active document tab.
+                    if active {
+                        let accent = crate::theme::TabAccent::for_tab(&t, tab).color;
+                        let line = if nuclear_hud() {
+                            Rect::from_min_max(pos2(tr.left() + 10.0, tr.bottom() - 3.0 + inset), pos2(tr.right() - 10.0, tr.bottom() + inset))
+                        } else {
+                            Rect::from_min_max(pos2(tr.left() + 8.0, tr.bottom() - 2.5), pos2(tr.right() - 8.0, tr.bottom()))
+                        };
+                        ui.painter().rect_filled(line, 1, accent);
+                    }
                     if ui.clip_rect().contains(tr.center()) {
                         crate::scenario::publish_target(&format!("tab:{tab}"), tr);
                         crate::scenario::publish_rect(&format!("toolbar_tab:{tab}"), tr);
@@ -1199,8 +1448,12 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
     let layout = shell_layout(app);
     let floating = Container::for_layout(layout, Surface::Panel).floating();
     let labels = app.preferences.ribbon_labels;
-    let button_height = if labels { BUTTON_HEIGHT } else { ICON_BUTTON_HEIGHT };
-    let group_height = if labels { GROUP_HEIGHT } else { ICON_GROUP_HEIGHT };
+    let m = metrics();
+    let button_height = if labels { m.button } else { m.icon_button };
+    let group_height = if labels { m.group } else { m.icon_group };
+    // How far the comfortable layout moves labels and the workspace column down.
+    let shift = m.label_top - COMPACT.label_top;
+    let ws_shift = (group_height - if labels { COMPACT.group } else { COMPACT.icon_group }) / 2.0;
     let ribbon_height = ribbon_height(labels);
     let gallery_width = if labels { CONSTRAINT_GRID_WIDTH } else { 6.0 * 27.0 };
     let cards = shell_cards(app, ui.available_rect_before_wrap());
@@ -1211,8 +1464,20 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
     let frame = host.edge_frame(fill);
     let chrome = ribbon.exact_size(height).show_separator_line(false).frame(frame).show(ui, |ui| {
         let r = if floating { Rect::from_min_max(cards.workspace.min, cards.ribbon.max) } else { frame.outer_rect(ui.max_rect()) };
-        let ws = if floating { cards.workspace } else { Rect::from_min_size(r.left_top(), vec2(WORKSPACE_WIDTH, ribbon_height - 1.0)) };
+        // Docked (Nuclear's HUD): the workspace switcher is a compact drop-down at the start of
+        // the tab row, and the command groups run from the window's left edge.
+        let nuclear = nuclear_hud();
+        let ws = if floating {
+            cards.workspace
+        } else if !nuclear {
+            Rect::from_min_size(r.left_top(), vec2(WORKSPACE_WIDTH, ribbon_height - 1.0))
+        } else {
+            let label = app.tr(if crate::render_workspace::active(app) { "ui.render" } else { "ui.design" });
+            let text = ui.painter().layout_no_wrap(label.to_string(), crate::fonts::semibold(workspace_tab_font(&t)), t.text).size().x;
+            Rect::from_min_size(r.left_top(), vec2((text + DOCKED_SWITCHER_PADDING).max(WORKSPACE_WIDTH), tab_row_height()))
+        };
         let ribbon_left = if floating { cards.ribbon.left() } else { ws.right() };
+        let panels_left = if floating || !nuclear { ribbon_left } else { r.left() + DOCKED_RIBBON_INSET };
         if floating {
             for card in [ws, cards.ribbon] {
                 let fill =
@@ -1248,8 +1513,9 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         } else {
             0.0
         };
+        let stripe = if floating || !nuclear || crate::render_workspace::active(app) { t.space_3 } else { 0.0 };
         painter.rect_filled(
-            Rect::from_min_size(ws.left_top() + vec2(accent_inset, 0.0), vec2((ws.width() - 2.0 * accent_inset).max(0.0), t.space_3)),
+            Rect::from_min_size(ws.left_top() + vec2(accent_inset, 0.0), vec2((ws.width() - 2.0 * accent_inset).max(0.0), stripe)),
             egui::CornerRadius { nw: 0, ne: 0, sw: if floating { t.radius_sm / 2 } else { 0 }, se: if floating { t.radius_sm / 2 } else { 0 } },
             if crate::render_workspace::active(app) { crate::theme::TabAccent::current(ui.ctx()).color } else { t.accent },
         );
@@ -1257,19 +1523,28 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             t.secondary_line(&painter, [ws.right_top(), ws.right_bottom()], t.border);
         }
         let render = crate::render_workspace::active(app);
-        if render {
+        if render && (floating || !nuclear) {
             crate::ui_kit::StageBar::workspace(ui, ws, "ws_render", app.tr("ui.render"), app.tr("ui.ribbon_workspace"));
+        } else if !floating && nuclear {
+            // Icon, workspace name and its arrow, in one line on the tab row.
+            let workspace_icon = if render { "ws_render" } else { "ws_design" };
+            icons::paint_icon(&painter, Rect::from_center_size(pos2(ws.left() + 20.0, ws.center().y), vec2(20.0, 20.0)), workspace_icon, 1.0);
+            let label = app.tr(if render { "ui.render" } else { "ui.design" });
+            let galley = painter.layout_no_wrap(label.to_string(), crate::fonts::semibold(workspace_tab_font(&t)), t.text);
+            let width = galley.size().x;
+            painter.galley(pos2(ws.left() + 36.0, ws.center().y - galley.size().y / 2.0), galley, t.text);
+            dropdown_arrow(&painter, pos2(ws.left() + 36.0 + width + 9.0, ws.center().y + 0.5), t.text_dim);
         } else {
             let workspace_icon = if render { "ws_render" } else { "ws_design" };
             icons::paint_icon(
                 &painter,
-                Rect::from_center_size(pos2(ws.center().x, ws.top() + if labels { 39.0 } else { 25.0 }), vec2(30.0, 30.0)),
+                Rect::from_center_size(pos2(ws.center().x, ws.top() + ws_shift + if labels { 39.0 } else { 25.0 }), vec2(30.0, 30.0)),
                 workspace_icon,
                 1.0,
             );
             ribbon_text(
                 ui,
-                pos2(ws.center().x, ws.top() + if labels { 69.0 } else { 50.0 }),
+                pos2(ws.center().x, ws.top() + ws_shift + if labels { 69.0 } else { 50.0 }),
                 app.tr(if render { "ui.render" } else { "ui.design" }),
                 t.font_button,
                 t.text,
@@ -1284,8 +1559,12 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 egui::TextStyle::Button,
             );
             let label_width = galley.size().x;
-            ribbon_galley(ui, pos2(ws.center().x - 6.0, ws.top() + if labels { 89.0 } else { 70.0 }), galley, t.text_dim);
-            dropdown_arrow(&painter, pos2(ws.center().x - 6.0 + label_width / 2.0 + 7.0, ws.top() + if labels { 89.5 } else { 70.5 }), t.text_dim);
+            ribbon_galley(ui, pos2(ws.center().x - 6.0, ws.top() + ws_shift + if labels { 89.0 } else { 70.0 }), galley, t.text_dim);
+            dropdown_arrow(
+                &painter,
+                pos2(ws.center().x - 6.0 + label_width / 2.0 + 7.0, ws.top() + ws_shift + if labels { 89.5 } else { 70.5 }),
+                t.text_dim,
+            );
         }
         if wresp.on_hover_text(app.tr("ui.change_workspace")).clicked() {
             crate::context_menu::toggle_for(app, ws, ws.left_bottom(), crate::context_menu::Target::Workspace);
@@ -1297,7 +1576,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             crate::render_ui::stage_bar(app, ui, cards.ribbon);
             return;
         }
-        ribbon_tabs(app, ui, Rect::from_min_max(pos2(ribbon_left, r.top()), pos2(r.right(), r.top() + TAB_ROW_HEIGHT)));
+        ribbon_tabs(app, ui, Rect::from_min_max(pos2(ribbon_left, r.top()), pos2(r.right(), r.top() + tab_row_height())));
         // Panels.
         let tab = app.ui.tab.clone();
         // The command whose tool or dialog is open right now, shown pressed in the toolbar.
@@ -1308,8 +1587,8 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             (None, Some(_)) => app.last_command.as_ref().map(|(id, _)| id.clone()),
             _ => None,
         };
-        let mut px = ribbon_left;
-        let top = r.top() + TAB_ROW_HEIGHT;
+        let mut px = panels_left;
+        let top = r.top() + tab_row_height();
         let mut drop: Option<(&'static str, &'static str, Option<&'static str>)> = None;
         let mut menu: Option<(egui::Pos2, &'static str)> = None;
         // A drop-down row's pin icon clicked: pin or unpin that command.
@@ -1320,7 +1599,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
         // Every panel with all its buttons (the user's pins have no cap); a toolbar too narrow
         // for them narrows the buttons, then trims panels into their drop-down and the » menu.
         let editing_in_place = app.edit_in_place.active.is_some();
-        let lists: Vec<_> = crate::toolbar_custom::panel_lists(&tab)
+        let mut lists: Vec<_> = crate::toolbar_custom::panel_lists(&tab)
             .into_iter()
             .filter(|(panel, _, _)| editing_in_place || !(tab == "MODEL" && *panel == "FINISH EDITING"))
             .map(|(panel, cmds, promote)| {
@@ -1338,6 +1617,17 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 (panel, cmds, shown)
             })
             .collect();
+        // Recommended tools follow the panels (before the Sketch exit group): the tab's own
+        // commands that are not already buttons, brought up to date only at idle boundaries.
+        let commands: Vec<&'static solidcraft_engine::CommandSpec> = lists.iter().flat_map(|(_, cmds, _)| cmds.iter().copied()).collect();
+        let buttons: Vec<&'static str> = lists.iter().flat_map(|(_, _, shown)| shown.iter().map(|c| c.id)).collect();
+        crate::recommend::refresh(app, ui.ctx(), &commands, &buttons);
+        let recommended = crate::recommend::shown(app, &commands, &buttons);
+        let finish_last = tab == "SKETCH" || (tab == "MODEL" && editing_in_place);
+        let rec_at = (!recommended.is_empty()).then(|| lists.len().saturating_sub(usize::from(finish_last)));
+        if let Some(at) = rec_at {
+            lists.insert(at.min(lists.len()), (crate::recommend::PANEL, recommended.clone(), recommended));
+        }
         let sizes: Vec<PanelSize> = lists
             .iter()
             .map(|(panel, _, shown)| {
@@ -1349,9 +1639,11 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                             .filter(|f| tab == "SKETCH" && *panel == "CREATE" && f.commands.first().copied() == Some(c.id));
                         let label = family.map_or_else(|| crate::workspace::ribbon_button_label(c), |f| f.label);
                         if labels {
-                            ButtonSize { width: ribbon_button_width(&painter, app.tr_label(label)), min_width: BUTTON_MIN_WIDTH }
+                            let text = app.tr_label(label);
+                            let width = ribbon_button_width(&painter, text);
+                            ButtonSize { width, min_width: ribbon_button_min_width(&painter, text).min(width) }
                         } else {
-                            let width = if family.is_some() { 50.0 } else { 40.0 };
+                            let width = if family.is_some() { m.icon_width + 10.0 } else { m.icon_width };
                             ButtonSize { width, min_width: width }
                         }
                     })
@@ -1369,7 +1661,15 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             sizes.last().and_then(|size| if tab == "SKETCH" || (tab == "MODEL" && editing_in_place) { Some(Plan::full(size)) } else { None });
         let finish_width = finish_plan.as_ref().map_or(0.0, |p| p.width().max(80.0));
         let normal_count = sizes.len().saturating_sub(usize::from(finish_plan.is_some()));
-        let mut plans = fit(sizes.get(..normal_count).unwrap_or_default(), right - 4.0 - px - finish_width);
+        let room = right - 4.0 - px - finish_width;
+        let normal: Vec<PanelSize> =
+            sizes.iter().take(normal_count).enumerate().filter(|(i, _)| Some(*i) != rec_at).map(|(_, s)| s.clone()).collect();
+        let mut plans = fit(&normal, room);
+        if let Some(at) = rec_at.filter(|at| *at <= plans.len()) {
+            let left = if plans.iter().any(|p| p.fit == Fit::More) { 0.0 } else { room - used(&plans) };
+            let plan = sizes.get(at).map_or_else(Plan::more, |size| recommended_plan(size, left));
+            plans.insert(at, plan);
+        }
         let finish_right = plans.iter().any(|p| p.fit == Fit::More);
         plans.extend(finish_plan);
         crate::scenario::publish_count("toolbar_collapsed", plans.iter().filter(|p| p.fit == Fit::Collapsed).count() as f64);
@@ -1390,6 +1690,8 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             let collapsed = plan.fit == Fit::Collapsed || (shown.is_empty() && !cmds.is_empty());
             let trimmed = plan.shown < plan.widths.len();
             let finish = (tab == "SKETCH" && *panel == "FINISH SKETCH") || (tab == "MODEL" && *panel == "FINISH EDITING");
+            // Recommended tools are not a place to pin to: nothing is dropped or dragged there.
+            let suggested = *panel == crate::recommend::PANEL;
             let pinned = finish;
             let width = if pinned { finish_width } else { plan.width() };
             if pinned && finish_right {
@@ -1427,7 +1729,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     let info = c.info(&app.session);
                     icons::paint_icon(
                         &painter,
-                        Rect::from_center_size(br.center() - vec2(0.0, 3.0), vec2(26.0, 26.0)),
+                        Rect::from_center_size(br.center() - vec2(0.0, 3.0), vec2(m.icon, m.icon)),
                         info.icon,
                         f32::from(t.icon.a()) / 255.0,
                     );
@@ -1450,7 +1752,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 let mut br = whole;
                 if family.is_some() {
                     if labels {
-                        br.max.y = whole.top() + 32.0;
+                        br.max.y = whole.top() + 32.0 + shift;
                     } else {
                         br.max.x -= 14.0;
                     }
@@ -1464,16 +1766,18 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 if selected.id != c.id {
                     crate::scenario::publish_handle(&format!("button:{}", selected.id), br.center());
                 }
-                if resp.drag_started() {
+                if resp.drag_started() && !suggested {
                     resp.dnd_set_drag_payload(ToolbarDrag { id: c.id, from_menu: false });
                 }
                 if let Some(d) = resp.dnd_hover_payload::<ToolbarDrag>()
                     && d.id != c.id
+                    && !suggested
                 {
                     ui_kit::insertion_marker(&painter, br.left() - 1.0, br.top() + 2.0, br.bottom() - 2.0);
                 }
                 if let Some(d) = resp.dnd_release_payload::<ToolbarDrag>()
                     && d.id != c.id
+                    && !suggested
                 {
                     drop = Some((d.id, *panel, Some(c.id)));
                 }
@@ -1493,9 +1797,11 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     painter.rect_filled(whole, t.radius_sm, t.hover);
                 }
                 let icon = if selected.id == "sketch.finish" { "finish" } else { info.icon };
-                let side = if finish { 30.0 } else { 26.0 };
-                let icon_rect =
-                    Rect::from_center_size(pos2(br.center().x, whole.top() + if labels { 16.0 } else { button_height / 2.0 }), vec2(side, side));
+                let side = if finish { m.icon + 4.0 } else { m.icon };
+                let icon_rect = Rect::from_center_size(
+                    pos2(br.center().x, whole.top() + if labels { 16.0 + shift / 2.0 } else { button_height / 2.0 }),
+                    vec2(side, side),
+                );
                 icons::paint_icon(&painter, icon_rect, icon, if info.enabled { 1.0 } else { 0.35 });
                 let tr_label = app.tr_label(info.label).to_string();
                 resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled() && info.enabled, &tr_label));
@@ -1505,7 +1811,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 }
                 if let Some(f) = family {
                     let ar = if labels {
-                        Rect::from_min_max(pos2(whole.left(), whole.top() + 30.0), pos2(whole.right(), whole.top() + 48.0))
+                        Rect::from_min_max(pos2(whole.left(), whole.top() + 30.0 + shift), pos2(whole.right(), whole.top() + 48.0 + shift))
                     } else {
                         Rect::from_min_max(pos2(br.right(), whole.top()), whole.right_bottom())
                     };
@@ -1516,7 +1822,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     }
                     // The title sits on the same line as the other buttons' labels.
                     if labels {
-                        let title_y = whole.top() + 39.0;
+                        let title_y = whole.top() + 39.0 + shift;
                         let galley = ribbon_button_galley(&painter, app.tr_label(f.label), ar.width() - 16.0, t.text);
                         painter.galley(pos2(ar.center().x - 4.0, title_y - galley.size().y / 2.0), galley, t.text);
                         dropdown_arrow(&painter, pos2(ar.right() - 6.0, title_y + 0.5), t.text_dim);
@@ -1534,7 +1840,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     let button_label = crate::workspace::ribbon_button_label(selected);
                     let label = app.tr_label(if button_label == selected.label { info.label } else { button_label });
                     let color = if info.enabled { t.text } else { t.text_dim };
-                    let galley = ribbon_button_galley(&painter, label, whole.width() - BUTTON_LABEL_PADDING, color);
+                    let galley = ribbon_button_galley(&painter, label, whole.width() - m.label_padding, color);
                     painter.galley(pos2(whole.center().x, ribbon_label_top(whole, galley.size().y)), galley, t.text);
                 }
             }
@@ -1543,7 +1849,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     // A quiet rule sets the grid apart from the large button before it.
                     t.secondary_line(
                         &painter,
-                        [pos2(button_x - 1.5, top + 8.0), pos2(button_x - 1.5, top + button_height.min(46.0))],
+                        [pos2(button_x - 1.5, top + 8.0), pos2(button_x - 1.5, top + button_height.min(46.0 + shift))],
                         t.toolbar.lerp_to_gamma(t.border, 0.5),
                     );
                 }
@@ -1603,9 +1909,10 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             // The group area ends 1 px above the card's bottom edge, so the highlight is
             // RIBBON_TAB_INSET from the card's bottom edge (and from its left edge in the first
             // section): its corner is concentric with the card's.
+            let section_height = if nuclear_hud() { NUCLEAR_SECTION_HEIGHT } else { SECTION_HEIGHT };
             let lr = Rect::from_min_size(
-                pos2(px + RIBBON_TAB_INSET, top + group_height - SECTION_HEIGHT - (RIBBON_TAB_INSET - 1.0)),
-                vec2((width - 2.0 * RIBBON_TAB_INSET).max(0.0), SECTION_HEIGHT),
+                pos2(px + RIBBON_TAB_INSET, top + group_height - section_height - (RIBBON_TAB_INSET - 1.0)),
+                vec2((width - 2.0 * RIBBON_TAB_INSET).max(0.0), section_height),
             );
             let lresp = ui.interact(lr, ui.id().with(("panel", panel)), Sense::click());
             crate::scenario::publish_handle(&format!("panel:{tab}:{panel}"), lr.center());
@@ -1616,18 +1923,22 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
             if panel_open || hot {
                 painter.rect_filled(lr, t.radius_sm, if panel_open { accent.soft } else { t.hover });
             }
-            let label = if finish { app.tr("ui.ribbon_exit").to_string() } else { ribbon_label(app, panel) };
-            let font = if panel_open || hot {
-                crate::fonts::semibold(crate::theme::Tokens::get().font_caption)
+            let label = if finish {
+                app.tr("ui.ribbon_exit").to_string()
+            } else if suggested {
+                app.tr("ui.ribbon_recommended").to_string()
             } else {
-                FontId::proportional(crate::theme::Tokens::get().font_caption)
+                ribbon_label(app, panel)
             };
+            let section_size = crate::theme::Tokens::get().font_caption.max(m.section);
+            let font = if panel_open || hot { crate::fonts::semibold(section_size) } else { FontId::proportional(section_size) };
             let label_width = painter.layout_no_wrap(label.clone(), font, t.text_dim).size().x;
             let ink = if panel_open { accent.ink } else { t.text_dim };
-            ribbon_text(ui, lr.center() - vec2(if finish { 0.0 } else { 6.0 }, 0.0), &label, t.font_caption, ink, panel_open || hot);
+            ribbon_text(ui, lr.center() - vec2(if finish { 0.0 } else { 6.0 }, 0.0), &label, section_size, ink, panel_open || hot);
             if !finish {
                 dropdown_arrow(&painter, pos2(lr.center().x + label_width / 2.0 + 1.0, lr.center().y + 0.5), ink);
             }
+            let lresp = if suggested { lresp.on_hover_text(app.tr("ui.ribbon_recommended_why")) } else { lresp };
             if lresp.clicked() && enabled_panel {
                 ui.ctx().data_mut(|d| {
                     let key = egui::Id::new("sc_panel_open");
@@ -1650,7 +1961,7 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                     rect.contains(p)
                 })
             });
-            if !over_button && ui.rect_contains_pointer(panel_rect) && egui::DragAndDrop::payload::<ToolbarDrag>(ui.ctx()).is_some() {
+            if !suggested && !over_button && ui.rect_contains_pointer(panel_rect) && egui::DragAndDrop::payload::<ToolbarDrag>(ui.ctx()).is_some() {
                 ui_kit::insertion_marker(&painter, px + width - 4.0, top + 4.0, top + 38.0);
                 if ui.input(|input| input.pointer.any_released())
                     && let Some(d) = egui::DragAndDrop::take_payload::<ToolbarDrag>(ui.ctx())
@@ -1739,7 +2050,12 @@ pub fn toolbar(app: &mut SolveApp, ui: &mut egui::Ui) {
                 }
             }
             px += width;
-            painter.line_segment([pos2(px, top + 4.0), pos2(px, top + group_height - 3.0)], t.tertiary_border(t.border));
+            if nuclear_hud() {
+                // A clear divider between groups, as in Nuclear's reference ribbon.
+                painter.line_segment([pos2(px, top + 10.0), pos2(px, top + group_height - 8.0)], Stroke::new(1.0, t.border));
+            } else {
+                painter.line_segment([pos2(px, top + 4.0), pos2(px, top + group_height - 3.0)], t.tertiary_border(t.border));
+            }
             px += PANEL_GAP;
         }
         if !overflow.is_empty() {
@@ -2830,15 +3146,15 @@ mod header_report_tests {
     fn variable_width_buttons_narrow_before_rightmost_equal_panels_lose_buttons() {
         let panels = vec![PanelSize {
             buttons: vec![
-                ButtonSize { width: 76.0, min_width: BUTTON_MIN_WIDTH },
-                ButtonSize { width: 63.0, min_width: BUTTON_MIN_WIDTH },
-                ButtonSize { width: 54.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH + 22.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH + 9.0, min_width: BUTTON_MIN_WIDTH },
+                ButtonSize { width: BUTTON_MIN_WIDTH, min_width: BUTTON_MIN_WIDTH },
             ],
         }];
         let full = used(&panels.iter().map(Plan::full).collect::<Vec<_>>());
         let narrow = fit(&panels, full - 1.0);
         assert_eq!(narrow[0].shown, 3);
-        assert_eq!(narrow[0].widths, [75.0, 62.0, 54.0]);
+        assert_eq!(narrow[0].widths, [BUTTON_MIN_WIDTH + 21.0, BUTTON_MIN_WIDTH + 8.0, BUTTON_MIN_WIDTH]);
         let minimum = panel_width(&[BUTTON_MIN_WIDTH; 3]) + PANEL_GAP;
         let narrow = fit(&panels, minimum);
         assert_eq!(narrow[0].shown, 3);
@@ -2914,7 +3230,7 @@ mod header_report_tests {
         }
     }
 
-    /// The 34 px bar groups brand/home, File/Save/Undo/Redo, documents, then the right cluster.
+    /// The 44 px bar groups brand/home, File/Save/Undo/Redo, documents, then the right cluster.
     #[test]
     fn title_bar_keeps_tabs_left_and_help_right() {
         let mut h = crate::scenario::Harness::new();
@@ -2930,14 +3246,14 @@ mod header_report_tests {
         let [report, _] = h.widget("Report a bug").unwrap();
         let file = h.widget("File").expect("the File menu has a label");
         assert_eq!(file[0] as f32, at("appbar:file"));
-        assert_eq!(APP_BAR_HEIGHT, 34.0);
+        assert_eq!(APP_BAR_HEIGHT, 44.0);
         let rect = |name: &str| crate::scenario::rect_of(name).unwrap();
         let first = rect("titlebar:separator:brand");
         let second = rect("titlebar:separator:documents");
         assert_eq!(first.size(), vec2(1.0, 20.0));
         assert_eq!(second.size(), vec2(1.0, 20.0));
-        assert_eq!(first.center().y, 17.0);
-        assert_eq!(second.center().y, 17.0);
+        assert_eq!(first.center().y, APP_BAR_HEIGHT / 2.0);
+        assert_eq!(second.center().y, APP_BAR_HEIGHT / 2.0);
         assert!(rect("titlebar:home").right() < first.left());
         assert!(first.right() < rect("appbar:file").left());
         assert!(at("appbar:file") < at("titlebar:save") && at("titlebar:save") < at("appbar:undo") && at("appbar:undo") < at("appbar:redo"));
@@ -3454,9 +3770,34 @@ mod app_bar_tests {
                     assert!(contrast(t.app_bar_text, bg) >= 4.5, "dark={dark}, {vision:?}, {fill:?}");
                 }
                 assert!(contrast(t.app_bar_separator, t.app_bar) >= 3.0);
-                assert!(contrast(t.app_bar, t.warning) >= 4.5, "approval counts need dark ink on amber");
+                assert!(contrast(crate::ui_kit::badge_ink(&t), t.warning) >= 4.5, "approval counts stay readable on amber");
             }
         }
+    }
+
+    /// The large Nuclear HUD is the default density and its own sizes; Comfortable and Compact
+    /// keep the earlier bars, rows and strips.
+    #[test]
+    fn nuclear_density_draws_the_large_hud_and_the_others_keep_the_earlier_one() {
+        let mut h = crate::scenario::Harness::new();
+        assert_eq!(crate::prefs::Prefs::default().toolbar_density, Density::Nuclear);
+        h.app.home.open = false;
+        h.app.preferences.toolbar_density = Density::Nuclear;
+        h.app.preferences.layout = crate::shell::LayoutMode::Docked;
+        h.app.ui.layout = crate::shell::LayoutMode::Docked;
+        h.frames(3);
+        assert!(nuclear_hud());
+        assert_eq!((tab_row_height(), app_bar_height(), ribbon_height(true)), (40.0, 48.0, 159.0));
+        assert_eq!(crate::ui_kit::tree_row_height(), 32.0);
+        for density in [Density::Comfortable, Density::Compact] {
+            h.app.preferences.toolbar_density = density;
+            h.frames(2);
+            assert!(!nuclear_hud(), "{density:?}");
+            assert_eq!((tab_row_height(), app_bar_height()), (TAB_ROW_HEIGHT, APP_BAR_HEIGHT), "{density:?}");
+            assert_eq!(crate::ui_kit::tree_row_height(), crate::ui_kit::TREE_ROW_HEIGHT, "{density:?}");
+        }
+        assert_eq!(ribbon_height(true), RIBBON_HEIGHT - COMFORTABLE.group + COMPACT.group);
+        set_density(Density::Comfortable);
     }
 
     /// Save writes on a worker thread: frames until it has finished.
@@ -3615,15 +3956,15 @@ mod ribbon_label_tests {
                     for catalog in crate::i18n::LOCALES {
                         let locale = crate::i18n::Locale::for_language(catalog.id);
                         let label = locale.label(crate::workspace::ribbon_button_label(command));
-                        let whole = Rect::from_min_size(pos2(40.0, 2.0), vec2(ribbon_button_width(&painter, label), BUTTON_HEIGHT));
+                        let whole = Rect::from_min_size(pos2(40.0, 2.0), vec2(ribbon_button_width(&painter, label), COMFORTABLE.button));
                         let galley = ribbon_button_galley(&painter, label, whole.width() - BUTTON_LABEL_PADDING, Color32::WHITE);
                         let top = ribbon_label_top(whole, galley.size().y);
                         let at = format!("{} in {}: {label:?}", command.id, catalog.id);
-                        // The icon is 26 points square, centred 16 points below the button's top.
-                        assert!(top >= whole.top() + 16.0 + 13.0, "{at} starts at {top} over the icon");
+                        // The icon is 30 points square, centred 19 points below the button's top.
+                        assert!(top >= whole.top() + 19.0 + 15.0, "{at} starts at {top} over the icon");
                         assert!(top + galley.size().y <= whole.bottom() - BUTTON_LABEL_BOTTOM + 0.01, "{at} runs past the button");
                         if galley.rows.len() == 1 {
-                            assert_eq!(top, whole.top() + BUTTON_LABEL_TOP, "{at}");
+                            assert_eq!(top, whole.top() + COMFORTABLE.label_top, "{at}");
                         } else {
                             two_lines += 1;
                         }
@@ -3901,7 +4242,9 @@ mod fill_width_tests {
                 } else if sketch {
                     CONSTRAINT_GRID_WIDTH + BUTTON_GAP
                 } else {
-                    BUTTON_MIN_WIDTH + BUTTON_GAP
+                    // A hidden button keeps its longest word whole, so it may need up to the
+                    // widest button's room.
+                    BUTTON_MAX_WIDTH + BUTTON_GAP
                 };
                 if hidden {
                     assert!(gap < button, "{at}: {gap} px left blank while buttons are hidden");

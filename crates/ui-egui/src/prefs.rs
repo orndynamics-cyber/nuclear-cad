@@ -473,7 +473,24 @@ fn window_page<const INDEX: usize>(ui: &mut egui::Ui, app: &mut SolveApp) {
     page(app, ui, &Tokens::get());
 }
 
-pub const THEMES: &[(&str, &str)] = &[("dark", "Dark"), ("light", "Light"), ("system", "System")];
+/// The theme modes offered beside the theme files. The old built-in Dark and Light are the
+/// Nuclear palettes now (`palettes.rs`), so their ids only live on as aliases
+/// ([`canonical_theme`]).
+pub const THEMES: &[(&str, &str)] = &[("system", "System")];
+/// The theme files Follow System uses for a dark and a light system.
+/// The appearance settings' migration version (see [`lenient`]).
+pub const APPEARANCE_VERSION: u32 = 4;
+pub const SYSTEM_DARK: &str = "nuclear-graphite";
+pub const SYSTEM_LIGHT: &str = "nuclear-light";
+
+/// The Dark/Light flag set by a script (`ui.set {"dark": …}`): a Nuclear theme of the other
+/// side gives way to its partner, as the built-in Dark and Light did before the Nuclear themes.
+pub fn match_dark(app: &mut SolveApp, dark: bool) {
+    let theme = app.preferences.theme.as_str();
+    if theme.starts_with("nuclear-") && (theme != SYSTEM_LIGHT) != dark {
+        app.preferences.theme = if dark { SYSTEM_DARK } else { SYSTEM_LIGHT }.into();
+    }
+}
 pub const MSAA: [u32; 4] = [1, 2, 4, 8];
 /// Supersampling factors (#1288): off, 1.5× and 2× the viewport's pixels each way.
 pub const SUPERSAMPLING: [f32; 3] = [1.0, 1.5, 2.0];
@@ -552,6 +569,20 @@ pub enum OrbitAround {
     ViewCentre,
     /// The model point under the cursor when the drag began.
     Cursor,
+}
+
+/// How dragged manipulators find their step (the step menu beside the browser's title,
+/// `crate::manipulator_step`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StepMode {
+    /// The zoom where the arrow is, kept fine enough for the part being worked on (the default).
+    #[default]
+    Automatic,
+    /// The zoom alone: the step before the step menu.
+    Zoom,
+    /// `manipulator_step_mm` whatever the view.
+    Fixed,
 }
 
 /// Where the view goes when a sketch ends (Preferences: "When a sketch ends", #7038).
@@ -715,7 +746,9 @@ pub fn apply_file_limits(p: &Prefs) {
 
 /// The browser sidebar's first width, and the width [`Prefs::default`] restores; the panel
 /// itself clamps what the user drags to its own range.
-pub const DEFAULT_BROWSER_WIDTH: f32 = 250.0;
+pub const DEFAULT_BROWSER_WIDTH: f32 = 276.0;
+/// The browser's default width before the Nuclear sidebar (appearance version 3).
+const OLD_DEFAULT_BROWSER_WIDTH: f32 = 250.0;
 
 /// The browser's first share of the column it shares with History under it (#7371): the equal
 /// split; the column clamps what the user drags so both cards keep their header and two rows.
@@ -956,7 +989,32 @@ preference_settings! {
     max_design_file_mb: u64 = DEFAULT_DESIGN_MB, PAGE_GENERAL;
     /// `dark`, `light` or `system` (follow the operating system), or a theme file's id: a
     /// built-in one (`gruvbox-dark`, …) or one of `custom_themes` (#2255).
-    theme: String = "dark".into(), PAGE_INTERFACE;
+    theme: String = "nuclear-graphite".into(), PAGE_INTERFACE;
+    /// Missing (read as 0) in preferences saved before the Nuclear themes, whose `dark` and
+    /// `light` were the default look; [`lenient`] moves those to Nuclear Graphite and Nuclear
+    /// Light once, and saving writes 1, so a later choice of the old Dark or Light stays.
+    nuclear_appearance: u32 = APPEARANCE_VERSION;
+    /// Ribbon density: comfortable (larger icons and targets, the default) or compact.
+    toolbar_density: crate::toolbar::Density = crate::toolbar::Density::Nuclear, PAGE_INTERFACE;
+    /// The 3D view's background, apart from the theme: the theme's own, a studio gradient, or a
+    /// solid graphite, black, light grey or custom colour.
+    viewport_background: crate::theme::ViewportBackground = crate::theme::ViewportBackground::Theme, PAGE_INTERFACE;
+    /// The custom background colour, `#rrggbb`.
+    viewport_custom: String = "#8a9099".into(), PAGE_INTERFACE;
+    /// Recommended tools in the ribbon, learned from this computer's own use (`recommend`).
+    adaptive_tools: bool = true, PAGE_INTERFACE => check_id("prefs.adaptive_tools");
+    /// Keep the recommendations shown now; learning continues but nothing moves.
+    adaptive_frozen: bool = false, PAGE_INTERFACE => check_id("prefs.adaptive_frozen");
+    /// Recommendations the user hid, as `<tab>/<command id>`.
+    adaptive_hidden: Vec<String> = Vec::new();
+    /// The recommendations applied at the last idle boundary, per tab (kept so a restart or a
+    /// freeze shows the same ones).
+    adaptive_shown: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    /// Per-command use counts and scores, per tab. Only command ids and numbers: nothing about
+    /// the design, files or values. Never sent anywhere.
+    tool_usage: std::collections::BTreeMap<String, crate::recommend::Usage> = Default::default();
+    /// Launches seen by the recommendations (their observation period and score decay).
+    usage_sessions: u32 = 0;
     /// The 3D view's colours: the theme's own, or the Light or Dark theme's whatever the window
     /// uses (#4146).
     viewport_theme: crate::theme::ViewportTheme = crate::theme::ViewportTheme::Theme, PAGE_INTERFACE;
@@ -979,6 +1037,12 @@ preference_settings! {
     /// Keep the SKETCH tab in the ribbon, right after MODEL, while no sketch is open; its drawing
     /// tools then start a sketch first (#7904).
     sketch_tab_always: bool = false, PAGE_INTERFACE => check_id("prefs.sketch_tab_always");
+    /// The browser fills the left side from under the ribbon to the History (Nuclear's
+    /// continuous sidebar); off, it hugs its tree as before.
+    browser_full_height: bool = true, PAGE_INTERFACE => check_id("prefs.browser_full_height");
+    /// Outside a sketch the minor grid lines are faint (Nuclear's quieter grid); off, they are
+    /// drawn at full strength as before. Inside a sketch they are always at full strength.
+    quiet_grid: bool = true, PAGE_INTERFACE => check_id("prefs.quiet_grid");
     /// Where a dialog's OK and Cancel sit: under its inputs (the default) or in its title row (#6708).
     dialog_buttons: crate::ui_kit::DialogButtons = Default::default(), PAGE_INTERFACE;
     /// Where notices and offers stack: the view's bottom-right corner (the default) or the bottom
@@ -1175,8 +1239,19 @@ preference_settings! {
     suppress_sketch_snap: ModifierCombo = ModifierCombo::CTRL_ALT, PAGE_SKETCH;
     /// Temporary horizontal/vertical guides from hovered centres and edge midpoints.
     sketch_tracking_guides: bool = true, PAGE_SKETCH;
+    /// Drawing tools stick to points, midpoints, crossings, tangents, perpendiculars and curves
+    /// (the click keeps the relation) and follow guides from tracked points. Off: the classic
+    /// snap (nearest point, then the line inferences) and visual-only alignment guides.
+    sketch_reference_snap: bool = true, PAGE_SKETCH => check_id("prefs.sketch_reference_snap");
     /// Whether Alt/Option also frees gizmo / canvas manipulator arrows (Primary always does).
     manipulator_free_alt: bool = true, PAGE_SKETCH;
+    /// How dragged manipulator arrows step: Automatic (zoom and part size), Zoom (zoom alone, the
+    /// old step) or Fixed (`manipulator_step_mm`). Chosen in the menu beside the browser's title.
+    manipulator_step: StepMode = StepMode::default(), PAGE_SKETCH;
+    /// The Fixed step, in millimetres.
+    manipulator_step_mm: f64 = 1.0, PAGE_SKETCH, accept(crate::manipulator_step::LINEAR_RANGE);
+    /// The step dragged rotations snap to, in degrees, in every mode.
+    manipulator_angle_deg: f64 = 5.0, PAGE_SKETCH, accept(crate::manipulator_step::ANGLE_RANGE);
     /// A sketch's icon in History and the browser takes the colour of its solve state, and its
     /// tooltip names the state (#7245). Off: every sketch has the same icon, as before.
     sketch_state_icons: bool = true, PAGE_SKETCH => check_id("prefs.sketch_state_icons");
@@ -1396,8 +1471,10 @@ impl Snapshot {
         let units_changed = app.preferences.default_units != self.prefs.default_units;
         // Update bookkeeping isn't a setting: a check that finished while the dialog was open stays.
         let update = std::mem::take(&mut app.preferences.update);
+        let learned = app.preferences.clone();
         app.preferences = self.prefs;
         app.preferences.update = update;
+        keep_learned(&learned, &mut app.preferences);
         if units_changed {
             default_units_changed(app);
         }
@@ -1464,7 +1541,17 @@ fn apply_pending(app: &mut SolveApp) -> bool {
     };
     // Update bookkeeping isn't a setting and Cancel keeps it (`restore`), so it isn't a change.
     snapshot.prefs.update.clone_from(&app.preferences.update);
+    keep_learned(&app.preferences, &mut snapshot.prefs);
     app.prefs_window.snapshot.as_ref().is_some_and(|s| !s.matches(app))
+}
+
+/// The recommended tools' bookkeeping (counts, launches, shown and hidden ones) isn't a setting:
+/// use while the dialog is open, Reset learned usage and Hide stay, and none of it enables Apply.
+fn keep_learned(from: &Prefs, to: &mut Prefs) {
+    to.tool_usage.clone_from(&from.tool_usage);
+    to.usage_sessions = from.usage_sessions;
+    to.adaptive_shown.clone_from(&from.adaptive_shown);
+    to.adaptive_hidden.clone_from(&from.adaptive_hidden);
 }
 
 /// The colour theme (#2255): Dark, Light, System, the built-in theme files and the imported
@@ -1474,11 +1561,13 @@ fn theme_row(app: &mut SolveApp, ui: &mut egui::Ui) {
     let mut choices = theme_choices(app);
     // While a file is followed (#7573) it is the theme, so no tile shows as chosen.
     let following = !app.prefs_window.follow.path(&app.preferences.theme_follow).is_empty();
+    // Nuclear's own themes and Follow System first, then the other theme files.
     choices.sort_by_key(|(id, _)| match id.as_str() {
-        "light" => 0,
-        "dark" => 1,
-        "system" => 2,
-        _ => 3,
+        "nuclear-graphite" => 0,
+        "nuclear-carbon" => 1,
+        "nuclear-light" => 2,
+        "system" => 3,
+        _ => 4,
     });
     let mut tile_action: Option<(&str, String)> = None;
     let mut action_theme: Option<String> = None;
@@ -1490,8 +1579,9 @@ fn theme_row(app: &mut SolveApp, ui: &mut egui::Ui) {
         |ui| {
             for (id, label) in &choices {
                 let palette = match id.as_str() {
-                    "light" | "system" => Tokens::light(),
+                    "light" => Tokens::light(),
                     "dark" => Tokens::dark(),
+                    "system" => crate::theme_files::find(SYSTEM_DARK, &[]).map(crate::theme_files::resolve).unwrap_or_else(Tokens::dark),
                     _ => crate::theme_files::find(id, &app.preferences.custom_themes).map(crate::theme_files::resolve).unwrap_or_else(Tokens::dark),
                 };
                 let custom = app.preferences.custom_themes.iter().any(|t| t.id == *id);
@@ -1744,7 +1834,12 @@ pub fn apply(app: &mut SolveApp, ctx: &egui::Context) {
     // A theme file's palette, in place of its base's (dark or light); the visuals follow. A
     // followed file (#7573) wins while it is followed and has read completely once.
     follow_theme_file(app, ctx);
-    let file = app.prefs_window.follow.theme().or_else(|| crate::theme_files::find(&app.preferences.theme, &app.preferences.custom_themes));
+    // Follow System keeps Nuclear's accent: Nuclear Graphite or Nuclear Light.
+    let system = if app.ui.dark { SYSTEM_DARK } else { SYSTEM_LIGHT };
+    // Whatever the field holds (a script may set `dark`), the palette is a Nuclear one.
+    let chosen = canonical_theme(&app.preferences.theme, &app.preferences.custom_themes);
+    let id = if chosen == "system" { system } else { chosen.as_str() };
+    let file = app.prefs_window.follow.theme().or_else(|| crate::theme_files::find(id, &app.preferences.custom_themes));
     if let Some(f) = file {
         app.ui.dark = f.base.is_dark();
     }
@@ -2896,8 +2991,24 @@ fn theme_choices(app: &SolveApp) -> Vec<(String, String)> {
     modes.chain(files).collect()
 }
 
+/// The theme a saved or requested id stands for, so no path lands on a palette outside Nuclear's
+/// design system: the old `dark` and `light` ids are Nuclear Graphite and Nuclear Light, System
+/// stays (it follows the system between those two), a theme file keeps its id, and anything else
+/// (empty, removed, misspelt) is Nuclear Graphite.
+pub fn canonical_theme(id: &str, custom: &[crate::theme_files::ThemeFile]) -> String {
+    match id {
+        "dark" => SYSTEM_DARK,
+        "light" => SYSTEM_LIGHT,
+        "system" => "system",
+        _ if crate::theme_files::find(id, custom).is_some() => id,
+        _ => SYSTEM_DARK,
+    }
+    .to_string()
+}
+
 /// Turn a theme on (a mode or a theme file's id); dark follows it.
 fn select_theme(app: &mut SolveApp, id: &str) {
+    let id = &canonical_theme(id, &app.preferences.custom_themes);
     app.preferences.theme = id.to_string();
     match crate::theme_files::find(id, &app.preferences.custom_themes) {
         Some(f) => app.ui.dark = f.base.is_dark(),
@@ -3072,6 +3183,34 @@ fn limit_disabled_plugins(mut p: Prefs) -> Prefs {
 /// understand (a setting a newer or older release saved differently, a hand edit) falls back to
 /// its default on its own instead of discarding all of them.
 pub fn lenient(saved: &serde_json::Value) -> Prefs {
+    let mut p = lenient_inner(saved);
+    // Appearance migration (`nuclear_appearance`): 1 moved the old default Dark and Light to the
+    // Nuclear pair once; 2 resolves every saved theme through `canonical_theme`, so an old Dark or
+    // Light (chosen or inherited: they are the Nuclear palettes now), an empty, removed or unknown
+    // id all land on a Nuclear theme. Nuclear variants, System, the other theme files and the
+    // viewport's own settings are kept. Saved back as resolved, so it never alternates.
+    p.theme = canonical_theme(&p.theme, &p.custom_themes);
+    // 3: the Nuclear HUD. Settings saved before it carry the old defaults whether or not they were
+    // chosen: the floating layout becomes the docked one and the old browser width the new one.
+    // Floating stays one click away (Interface › Workspace), and any other width is kept.
+    if p.nuclear_appearance < 3 {
+        if p.layout == crate::shell::LayoutMode::Floating {
+            p.layout = crate::shell::LayoutMode::Docked;
+        }
+        if p.browser_width == OLD_DEFAULT_BROWSER_WIDTH {
+            p.browser_width = DEFAULT_BROWSER_WIDTH;
+        }
+    }
+    // 4: the large Nuclear HUD. The old default density, Comfortable, moves to it once; Compact
+    // and a later choice of Comfortable (the earlier look) are kept.
+    if p.nuclear_appearance < 4 && p.toolbar_density == crate::toolbar::Density::Comfortable {
+        p.toolbar_density = crate::toolbar::Density::Nuclear;
+    }
+    p.nuclear_appearance = APPEARANCE_VERSION;
+    p
+}
+
+fn lenient_inner(saved: &serde_json::Value) -> Prefs {
     if let Ok(p) = serde_json::from_value::<Prefs>(saved.clone()) {
         return limit_disabled_plugins(migrate(p));
     }
@@ -3112,6 +3251,21 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     {
         return Err("`viewport_theme` must be theme, light or dark".into());
     }
+    if let Some(v) = p.get("toolbar_density")
+        && v.as_str().and_then(crate::toolbar::Density::from_id).is_none()
+    {
+        return Err("`toolbar_density` must be comfortable or compact".into());
+    }
+    if let Some(v) = p.get("viewport_background")
+        && v.as_str().and_then(crate::theme::ViewportBackground::from_id).is_none()
+    {
+        return Err("`viewport_background` must be theme, studio, graphite, black, light_gray or custom".into());
+    }
+    if let Some(v) = p.get("viewport_custom")
+        && v.as_str().and_then(crate::theme::parse_hex).is_none()
+    {
+        return Err("`viewport_custom` must be a colour as #rrggbb".into());
+    }
     if let Some(value) = p.get("navigation_bar") {
         crate::navigation_bar::validate(value)?;
     }
@@ -3120,7 +3274,11 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     {
         return Err("`stand_up_unknown` must be ask, note or off".into());
     }
-    let new: Prefs = migrate(serde_json::from_value(cur).map_err(|e| e.to_string())?);
+    let mut new: Prefs = migrate(serde_json::from_value(cur).map_err(|e| e.to_string())?);
+    // `dark` and `light` name the Nuclear pair; an unknown id is refused below, as before.
+    if matches!(new.theme.as_str(), "dark" | "light") {
+        new.theme = canonical_theme(&new.theme, &new.custom_themes);
+    }
     if !UNITS.contains(&new.default_units.as_str()) {
         return Err(format!("units must be one of {}", UNITS.join(", ")));
     }
@@ -3182,6 +3340,9 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
     if !accepted::ui_scale(&new) || !accepted::look_at_speed(&new) {
         return Err("`ui_scale` must be 0.5…2.5 and `look_at_speed` 0.25…4".into());
     }
+    if !accepted::manipulator_step_mm(&new) || !accepted::manipulator_angle_deg(&new) {
+        return Err("`manipulator_step_mm` must be 0.0001…10000 and `manipulator_angle_deg` 0.01…180".into());
+    }
     if solidcraft_engine::doc::display_quality::DisplayQuality::parse(&new.display_quality).is_none() {
         return Err("`display_quality` must be coarse, normal, fine or ultra".into());
     }
@@ -3218,7 +3379,7 @@ pub fn set(app: &mut SolveApp, p: &serde_json::Value) -> Result<serde_json::Valu
 
 #[cfg(test)]
 pub(crate) fn reveal_preference(h: &mut crate::scenario::Harness, handle: &str) {
-    for _ in 0..16 {
+    for _ in 0..32 {
         let page = crate::scenario::rect_of("dialog:page_body").expect("preference body");
         let visible = crate::scenario::rect_of(handle)
             .map(|r| page.contains_rect(r))
@@ -4652,6 +4813,7 @@ mod tests {
             ("suppress_sketch_snap", json!(ModifierCombo::NONE), PAGE_SKETCH),
             ("sketch_state_icons", json!(false), PAGE_SKETCH),
             ("sketch_tracking_guides", json!(false), PAGE_SKETCH),
+            ("sketch_reference_snap", json!(false), PAGE_SKETCH),
             ("msaa", json!(8), PAGE_GRAPHICS),
         ];
         let defaults = serde_json::to_value(Prefs::default()).unwrap();
@@ -4793,8 +4955,8 @@ mod tests {
             let before = h.app.preferences.clone();
             assert!(set(&mut h.app, &json!({"browser_bodies_folders": bad})).is_err(), "{bad}");
             assert_eq!(h.app.preferences, before, "{bad}: a refused value changes nothing");
-            let saved = lenient(&json!({"browser_bodies_folders": bad, "theme": "light"}));
-            assert_eq!((saved.browser_bodies_folders, saved.theme.as_str()), (BodiesFolders::Several, "light"), "{bad}");
+            let saved = lenient(&json!({"browser_bodies_folders": bad, "theme": "light", "nuclear_appearance": 1}));
+            assert_eq!((saved.browser_bodies_folders, saved.theme.as_str()), (BodiesFolders::Several, "nuclear-light"), "{bad}");
         }
         h.call("ui.prefs", json!({"open": "Interface"}));
         reveal_preference(&mut h, "dialog:Bodies folders:Always");
@@ -4842,7 +5004,7 @@ mod tests {
 
         let mut other = crate::SolveApp::new(solidcraft_engine::Session::default(), crate::Services::default());
         other.load_prefs(&h.app.prefs());
-        assert_eq!((other.preferences.theme.as_str(), other.ui.dark, other.viewport_dark()), ("light", false, true));
+        assert_eq!((other.preferences.theme.as_str(), other.ui.dark, other.viewport_dark()), ("nuclear-light", false, true));
 
         let out = h.call("ui.prefs", json!({"theme": "gruvbox-dark-hard", "viewport_theme": "light"}));
         assert_eq!((out["result"]["dark"].as_bool(), out["result"]["viewport_dark"].as_bool()), (Some(true), Some(false)), "{out}");
@@ -5029,7 +5191,7 @@ mod tests {
         let mut h = crate::scenario::Harness::new();
         let out = h.call("ui.prefs", json!({"theme": "gruvbox-dark-hard"}));
         assert_eq!(out["result"]["theme"], "gruvbox-dark-hard", "{out}");
-        assert!(out["result"]["theme_ids"].as_array().is_some_and(|ids| ids.len() == 3 + crate::theme_files::builtin().len()), "{out}");
+        assert!(out["result"]["theme_ids"].as_array().is_some_and(|ids| ids.len() == THEMES.len() + crate::theme_files::builtin().len()), "{out}");
         h.frames(2);
         let hard = crate::theme_files::find("gruvbox-dark-hard", &[]).map(crate::theme_files::resolve).unwrap();
         assert!(h.app.ui.dark);
@@ -5074,7 +5236,7 @@ mod tests {
         assert_eq!(other.preferences.custom_themes[0].borders, h.app.preferences.custom_themes[0].borders);
 
         let out = h.call("ui.prefs", json!({"theme_remove": "paper"}));
-        assert_eq!((out["result"]["theme"].as_str(), out["result"]["dark"].as_bool()), (Some("light"), Some(false)), "{out}");
+        assert_eq!((out["result"]["theme"].as_str(), out["result"]["dark"].as_bool()), (Some("nuclear-light"), Some(false)), "{out}");
         assert!(h.app.preferences.custom_themes.is_empty());
         assert!(h.call("ui.prefs", json!({"theme_remove": "paper"}))["error"].is_string());
 
@@ -5082,7 +5244,7 @@ mod tests {
         h.call("ui.prefs", json!({"open": "Interface"}));
         h.call("ui.prefs", json!({"theme_import": file}));
         let out = h.call("ui.prefs", json!({"button": "cancel"}));
-        assert_eq!(out["result"]["theme"], "dark", "{out}");
+        assert_eq!(out["result"]["theme"], SYSTEM_DARK, "{out}");
         assert!(h.app.preferences.custom_themes.is_empty(), "Cancel takes the import back");
         h.frames(2);
         assert_eq!(Tokens::get().panel, Tokens::dark().panel);
@@ -5099,9 +5261,9 @@ mod tests {
         use solidcraft_engine::io::vfs;
         let mut h = crate::scenario::Harness::new();
         h.app.home.open = false;
-        h.call("ui.prefs", json!({"theme": "dark", "open": "Interface"}));
+        h.call("ui.prefs", json!({"theme": "nuclear-graphite", "open": "Interface"}));
         h.frames(2);
-        super::reveal_preference(&mut h, "prefs:theme_tile:dark");
+        super::reveal_preference(&mut h, "prefs:theme_tile:nuclear-graphite");
         let (root, out) = (h.dir.join("root"), h.dir.join("out"));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::create_dir_all(&out).unwrap();
@@ -5110,7 +5272,7 @@ mod tests {
             h.app.services.pick_save = Some(Box::new(move |_, _| Box::pin(std::future::ready(Some(answer.clone())))));
             h.app.status = None;
             vfs::scoped(Some(vfs::PathScope::new([root.clone()])), || {
-                h.step(&json!({"click":{"handle":"prefs:theme_tile:dark"},"button":"right"})).unwrap();
+                h.step(&json!({"click":{"handle":"prefs:theme_tile:nuclear-graphite"},"button":"right"})).unwrap();
                 h.step(&json!({"click":{"handle":"menu:theme_export"}})).unwrap();
                 h.frames(4);
             });
@@ -5118,7 +5280,7 @@ mod tests {
             if inside {
                 assert_eq!(status, None);
                 let file: serde_json::Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
-                assert_eq!(file, super::theme_file(&h.app, "dark", true));
+                assert_eq!(file, super::theme_file(&h.app, "nuclear-graphite", true));
             } else {
                 assert!(status.as_deref().is_some_and(|s| s.contains("outside the folders this agent may use")), "{status:?}");
                 assert!(!path.exists(), "nothing written outside");
@@ -5779,13 +5941,115 @@ mod tests {
         assert!(h.app.preferences.radial_context_menu, "Cancel restores the last Apply");
     }
 
+    /// The Nuclear HUD: a fresh install is docked with a full-height browser at the new width;
+    /// settings saved before it move once from the old floating default and 250 px width, a
+    /// width the user set stays, and a later explicit choice of Floating is kept.
+    #[test]
+    fn nuclear_hud_defaults_and_migration() {
+        use crate::shell::LayoutMode;
+        let fresh = Prefs::default();
+        assert_eq!((fresh.layout, fresh.browser_full_height, fresh.browser_width), (LayoutMode::Docked, true, DEFAULT_BROWSER_WIDTH));
+        let old = lenient(&json!({"layout": "floating", "browser_width": OLD_DEFAULT_BROWSER_WIDTH, "nuclear_appearance": 2}));
+        assert_eq!((old.layout, old.browser_width), (LayoutMode::Docked, DEFAULT_BROWSER_WIDTH));
+        let chosen_width = lenient(&json!({"browser_width": 320.0, "nuclear_appearance": 2}));
+        assert_eq!(chosen_width.browser_width, 320.0);
+        let chosen = lenient(&json!({"layout": "floating", "nuclear_appearance": APPEARANCE_VERSION}));
+        assert_eq!(chosen.layout, LayoutMode::Floating);
+        assert_eq!(lenient(&serde_json::to_value(&chosen).unwrap()).layout, LayoutMode::Floating);
+        // The large HUD: the default, reached once from the old default density, never from
+        // Compact or a later choice of the earlier look.
+        use crate::toolbar::Density;
+        assert_eq!(fresh.toolbar_density, Density::Nuclear);
+        for (saved, want) in [
+            (json!({"toolbar_density": "comfortable", "nuclear_appearance": 3}), Density::Nuclear),
+            (json!({"toolbar_density": "compact", "nuclear_appearance": 3}), Density::Compact),
+            (json!({"toolbar_density": "comfortable", "nuclear_appearance": APPEARANCE_VERSION}), Density::Comfortable),
+            (json!({"toolbar_density": "no-such-density"}), Density::Nuclear),
+        ] {
+            let p = lenient(&saved);
+            assert_eq!(p.toolbar_density, want, "{saved}");
+            assert_eq!(lenient(&serde_json::to_value(&p).unwrap()).toolbar_density, want, "{saved}");
+        }
+    }
+
+    /// Preferences saved before the Nuclear themes move from the old default Dark and Light to
+    /// Nuclear Graphite and Nuclear Light once; a later explicit choice of Dark stays.
+    #[test]
+    fn theme_contract_every_path_lands_on_a_nuclear_palette() {
+        use crate::theme::Tokens;
+        let hex = |c: egui::Color32| format!("#{:02x}{:02x}{:02x}", c.r(), c.g(), c.b());
+        // Fresh install, missing, old default, old explicit, empty and unknown themes.
+        assert_eq!(Prefs::default().theme, "nuclear-graphite");
+        for (saved, want) in [
+            (json!({}), "nuclear-graphite"),
+            (json!({"theme": "dark"}), "nuclear-graphite"),
+            (json!({"theme": "light"}), "nuclear-light"),
+            (json!({"theme": "dark", "nuclear_appearance": 1}), "nuclear-graphite"),
+            (json!({"theme": ""}), "nuclear-graphite"),
+            (json!({"theme": "no-such-theme"}), "nuclear-graphite"),
+            (json!({"theme": 7}), "nuclear-graphite"),
+            // Supported choices stay.
+            (json!({"theme": "nuclear-carbon"}), "nuclear-carbon"),
+            (json!({"theme": "nuclear-light"}), "nuclear-light"),
+            (json!({"theme": "system"}), "system"),
+            (json!({"theme": "gruvbox-dark"}), "gruvbox-dark"),
+        ] {
+            let p = lenient(&saved);
+            assert_eq!(p.theme, want, "{saved}");
+            assert_eq!(p.nuclear_appearance, APPEARANCE_VERSION);
+            // Saved as resolved: loading it again changes nothing (no alternating looks).
+            assert_eq!(lenient(&serde_json::to_value(&p).unwrap()).theme, want);
+        }
+        // The viewport's own settings survive the migration.
+        let p = lenient(&json!({"theme": "dark", "viewport_background": "custom", "viewport_custom": "#123456"}));
+        assert_eq!((p.viewport_background, p.viewport_custom.as_str()), (crate::theme::ViewportBackground::Custom, "#123456"));
+        // The built-in palettes, the fallback for anything without a theme file (the first frame,
+        // the view drawn in the other side's colours), are Nuclear's own.
+        let (dark, light) = (Tokens::dark(), Tokens::light());
+        assert_eq!(
+            [
+                hex(dark.app_bar),
+                hex(dark.panel),
+                hex(dark.control_fill),
+                hex(dark.hover),
+                hex(dark.text),
+                hex(dark.text_dim),
+                hex(dark.accent),
+                hex(dark.border)
+            ],
+            ["#191c20", "#23272d", "#2d333b", "#39424d", "#f1f3f5", "#b8c0cb", "#ff7a32", "#414a56"]
+        );
+        // Nuclear Light darkens the accent so it holds contrast on its pale panels.
+        assert_eq!(hex(light.accent), "#b8480f");
+        // Nuclear Graphite and Nuclear Light add no colour to those palettes (only shapes and
+        // icons): one source of truth for every colour.
+        for (id, base) in [("nuclear-graphite", dark), ("nuclear-light", light)] {
+            let file = crate::theme_files::find(id, &[]).unwrap();
+            let colours = |t: &Tokens| crate::theme_files::export(id, file.base, t)["colors"].clone();
+            assert_eq!(colours(&crate::theme_files::resolve(file)), colours(&base), "{id}");
+        }
+        // No theme file at all (before preferences load) still draws Nuclear.
+        let previous = crate::theme::set_custom(None);
+        assert_eq!(hex(Tokens::themed(true, crate::theme::ColorVision::Off).accent), "#ff7a32");
+        let _ = previous;
+        // Restore appearance defaults, a script's old ids and Follow System stay Nuclear.
+        let mut app = SolveApp::new(solidcraft_engine::Session::default(), Default::default());
+        app.preferences.theme = "gruvbox-dark".into();
+        super::interface::restore_appearance(&mut app);
+        assert_eq!(app.preferences.theme, "nuclear-graphite");
+        assert!(set(&mut app, &json!({"theme": "light"})).is_ok());
+        assert_eq!(app.preferences.theme, "nuclear-light");
+        assert_eq!(canonical_theme("system", &[]), "system");
+        assert_eq!((SYSTEM_DARK, SYSTEM_LIGHT), ("nuclear-graphite", "nuclear-light"));
+    }
+
     #[test]
     fn cosmetic_threads_default_off_and_follow_preferences_transactions() {
         assert!(!Prefs::default().cosmetic_threads);
         let old: Prefs = serde_json::from_value(json!({"theme":"light","msaa":4})).unwrap();
         assert!(!old.cosmetic_threads && old.theme == "light" && old.msaa == 4);
-        let malformed = lenient(&json!({"cosmetic_threads":"yes","theme":"light"}));
-        assert!(!malformed.cosmetic_threads && malformed.theme == "light");
+        let malformed = lenient(&json!({"cosmetic_threads":"yes","theme":"light","nuclear_appearance":1}));
+        assert!(!malformed.cosmetic_threads && malformed.theme == "nuclear-light");
         let mut h = crate::scenario::Harness::new();
         let design = h.app.session.doc.to_json();
         h.call("ui.prefs", json!({"open":"Graphics"}));
@@ -6085,7 +6349,7 @@ mod tests {
         app.keymap.custom.insert("solid.extrude".into(), "Shift+E".into());
         let v = control(&mut app, &json!({"button": "cancel"})).unwrap();
         assert_eq!(v["dialog"], serde_json::Value::Null);
-        assert!(app.ui.dark && app.preferences.theme == "dark" && app.preferences.ui_scale == 1.0 && app.preferences.zoom_to_cursor);
+        assert!(app.ui.dark && app.preferences.theme == "nuclear-graphite" && app.preferences.ui_scale == 1.0 && app.preferences.zoom_to_cursor);
         assert!(app.keymap.custom.is_empty(), "a rebinding made while the dialog was open is undone too");
 
         control(&mut app, &json!({"open": "Navigation", "nav": "alias", "look_at_anim": false})).unwrap();

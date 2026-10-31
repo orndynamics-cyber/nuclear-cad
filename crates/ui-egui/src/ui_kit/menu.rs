@@ -29,13 +29,19 @@ impl Menu {
         Self::button_with(ui, |ui, _| super::text_button(ui, label, true), add)
     }
 
+    /// [`Self::text`] for a menu that holds a field: a click inside it keeps it open (a choice
+    /// closes it with `ui.close()`), a click outside closes it.
+    pub(crate) fn text_with_field<R>(ui: &mut Ui, label: &str, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<Option<R>> {
+        Self::button_at(ui, |ui, _| super::text_button(ui, label, true), add, false, true)
+    }
+
     /// A row whose popup opens beside it, on the left only when the right has no room (#8267).
     pub(crate) fn item_button<R>(ui: &mut Ui, item: &MenuItem<'_>, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<Option<R>> {
-        Self::button_at(ui, |ui, _| item.show(ui), add, true)
+        Self::button_at(ui, |ui, _| item.show(ui), add, true, false)
     }
 
     fn button_with<R>(ui: &mut Ui, button: impl FnOnce(&mut Ui, bool) -> Response, add: impl FnOnce(&mut Ui) -> R) -> egui::InnerResponse<Option<R>> {
-        Self::button_at(ui, button, add, false)
+        Self::button_at(ui, button, add, false, false)
     }
 
     fn button_at<R>(
@@ -43,6 +49,7 @@ impl Menu {
         button: impl FnOnce(&mut Ui, bool) -> Response,
         add: impl FnOnce(&mut Ui) -> R,
         beside: bool,
+        keep_open: bool,
     ) -> egui::InnerResponse<Option<R>> {
         let previous = ui.style().clone();
         let frame = Self::frame();
@@ -89,6 +96,12 @@ impl Menu {
             let size = popup.get_expected_size().unwrap_or(egui::Vec2::ZERO);
             let at = Self::flyout_at(ui.ctx().content_rect(), response.interact_rect, size);
             popup.anchor(at).align(egui::RectAlign::BOTTOM_START).align_alternatives(&[]).gap(0.0).show(content)
+        } else if keep_open {
+            Container::new(ui.ctx(), Surface::Popup)
+                .menu(&response)
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside)
+                .frame(frame)
+                .show(content)
         } else {
             Container::new(ui.ctx(), Surface::Popup).menu(&response).frame(frame).show(content)
         };

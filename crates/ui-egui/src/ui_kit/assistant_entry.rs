@@ -57,11 +57,26 @@ pub(crate) fn assistant_entry(ui: &egui::Ui, response: &Response, state: Assista
         AssistantEntryState::Waiting(count) => {
             let text = count.to_string();
             let font = FontId::proportional(t.font_badge);
-            let galley = ui.painter().layout_no_wrap(text, font, t.app_bar);
+            let ink = badge_ink(&t);
+            let galley = ui.painter().layout_no_wrap(text, font, ink);
             let badge = Rect::from_center_size(c, vec2((galley.size().x + t.space_6).max(t.space_14), t.space_14));
             ui.painter().rect_filled(badge.expand(1.5), Tokens::outset_radius(f32::from(t.sketch_mode_radius), 1.5), ring);
             ui.painter().rect_filled(badge, t.sketch_mode_radius, t.warning);
-            ui.painter().galley(badge.center() - galley.size() / 2.0, galley, t.app_bar);
+            ui.painter().galley(badge.center() - galley.size() / 2.0, galley, ink);
         }
+    }
+}
+
+/// The waiting count's digits on the amber badge: the bar's own colour where it reads (a dark
+/// bar), otherwise whichever of the accent's ink or the text holds more contrast (a pale bar such
+/// as Nuclear Light's).
+pub(crate) fn badge_ink(t: &Tokens) -> egui::Color32 {
+    use crate::theme::contrast_ratio;
+    if contrast_ratio(t.app_bar, t.warning) >= 4.5 {
+        t.app_bar
+    } else if contrast_ratio(t.on_accent, t.warning) >= contrast_ratio(t.text, t.warning) {
+        t.on_accent
+    } else {
+        t.text
     }
 }
