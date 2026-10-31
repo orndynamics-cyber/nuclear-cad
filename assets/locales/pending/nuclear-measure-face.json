@@ -1,0 +1,110 @@
+{
+  "ar": {
+    "Bounds": "الحدود",
+    "measure.surface_cone": "مخروط",
+    "measure.surface_cylinder": "أسطوانة",
+    "measure.surface_other": "سطح آخر",
+    "measure.surface_plane": "مستوٍ",
+    "measure.surface_sphere": "كرة",
+    "measure.surface_torus": "طارة"
+  },
+  "de": {
+    "Bounds": "Umgrenzung",
+    "measure.surface_cone": "Kegel",
+    "measure.surface_cylinder": "Zylinder",
+    "measure.surface_other": "Andere Fläche",
+    "measure.surface_plane": "Ebene",
+    "measure.surface_sphere": "Kugel",
+    "measure.surface_torus": "Torus"
+  },
+  "en": {
+    "Bounds": "Bounds",
+    "measure.surface_cone": "Cone",
+    "measure.surface_cylinder": "Cylinder",
+    "measure.surface_other": "Other surface",
+    "measure.surface_plane": "Plane",
+    "measure.surface_sphere": "Sphere",
+    "measure.surface_torus": "Torus"
+  },
+  "en-GB": {
+    "Bounds": "Bounds",
+    "measure.surface_cone": "Cone",
+    "measure.surface_cylinder": "Cylinder",
+    "measure.surface_other": "Other surface",
+    "measure.surface_plane": "Plane",
+    "measure.surface_sphere": "Sphere",
+    "measure.surface_torus": "Torus"
+  },
+  "fr": {
+    "Bounds": "Encombrement",
+    "measure.surface_cone": "Cône",
+    "measure.surface_cylinder": "Cylindre",
+    "measure.surface_other": "Autre surface",
+    "measure.surface_plane": "Plan",
+    "measure.surface_sphere": "Sphère",
+    "measure.surface_torus": "Tore"
+  },
+  "he": {
+    "Bounds": "גבולות",
+    "measure.surface_cone": "חרוט",
+    "measure.surface_cylinder": "גליל",
+    "measure.surface_other": "משטח אחר",
+    "measure.surface_plane": "מישור",
+    "measure.surface_sphere": "כדור",
+    "measure.surface_torus": "טורוס"
+  },
+  "ja": {
+    "Bounds": "外接寸法",
+    "measure.surface_cone": "円錐",
+    "measure.surface_cylinder": "円柱",
+    "measure.surface_other": "その他の曲面",
+    "measure.surface_plane": "平面",
+    "measure.surface_sphere": "球",
+    "measure.surface_torus": "トーラス"
+  },
+  "ko": {
+    "Bounds": "외곽 치수",
+    "measure.surface_cone": "원뿔",
+    "measure.surface_cylinder": "원통",
+    "measure.surface_other": "기타 곡면",
+    "measure.surface_plane": "평면",
+    "measure.surface_sphere": "구",
+    "measure.surface_torus": "토러스"
+  },
+  "pt-BR": {
+    "Bounds": "Limites",
+    "measure.surface_cone": "Cone",
+    "measure.surface_cylinder": "Cilindro",
+    "measure.surface_other": "Outra superfície",
+    "measure.surface_plane": "Plano",
+    "measure.surface_sphere": "Esfera",
+    "measure.surface_torus": "Toro"
+  },
+  "ru": {
+    "Bounds": "Габариты",
+    "measure.surface_cone": "Конус",
+    "measure.surface_cylinder": "Цилиндр",
+    "measure.surface_other": "Другая поверхность",
+    "measure.surface_plane": "Плоскость",
+    "measure.surface_sphere": "Сфера",
+    "measure.surface_torus": "Тор"
+  },
+  "vi": {
+    "Bounds": "Kích thước bao",
+    "measure.surface_cone": "Hình nón",
+    "measure.surface_cylinder": "Hình trụ",
+    "measure.surface_other": "Mặt khác",
+    "measure.surface_plane": "Mặt phẳng",
+    "measure.surface_sphere": "Hình cầu",
+    "measure.surface_torus": "Hình xuyến"
+  },
+  "zh": {
+    "Bounds": "外包尺寸",
+    "measure.surface_cone": "圆锥",
+    "measure.surface_cylinder": "圆柱",
+    "measure.surface_other": "其他曲面",
+    "measure.surface_plane": "平面",
+    "measure.surface_sphere": "球面",
+    "measure.surface_torus": "圆环"
+  }
+}

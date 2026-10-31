@@ -92,6 +92,8 @@ pub enum Target {
     },
     /// The Section Analysis in the browser's Analysis folder.
     Section,
+    /// M on selected faces (Nuclear): the edits of those faces, never a move of their body.
+    MoveFace,
     /// A component's Bodies, Sketches or Construction folder, under the design (`scope` `c0`)
     /// or a placement (`o:<path>`).
     Folder {
@@ -389,6 +391,12 @@ pub fn items(app: &SolveApp, target: &Target) -> Vec<Item> {
         Target::Origin => crate::browser::origin_items(app),
         Target::NamedViews => vec![act("ui.newView", "New Named View", "perspective")],
         Target::Section => crate::browser::section_items(app),
+        Target::MoveFace => vec![
+            Item::heading("Move Face"),
+            cmd(app, "solid.offset_face", "Move Along the Normal"),
+            cmd(app, "solid.draft", "Rotate About an Edge"),
+            cmd(app, "solid.press_pull", "Press Pull"),
+        ],
         Target::Joint { id } => joint_items(app, *id),
         Target::ToolbarCommand { id } => crate::toolbar_custom::command_items(app, id),
         Target::Toolbar => crate::toolbar_custom::toolbar_items(app),

@@ -285,6 +285,11 @@ impl ViewportState {
     }
 }
 
+/// Where a model point shows in the view now, if it is in front of the camera.
+pub(crate) fn screen_of(app: &SolveApp, p: Vec3) -> Option<Pos2> {
+    display_proj(app).to_screen(p)
+}
+
 fn display_proj(app: &SolveApp) -> Proj {
     projection(app, app.viewport.rect.unwrap_or_else(|| Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))))
 }

@@ -44,6 +44,8 @@ pub struct HomeState {
     /// shows a placeholder instead of spinning forever. Cleared when the design is opened or saved
     /// (see `add_recent`), which asks for the picture again.
     failed: std::collections::HashSet<String>,
+    /// A recovery entry whose Discard waits for the user to confirm it.
+    pub(crate) discard_recovery: Option<solidcraft_engine::recovery::Entry>,
     samples: HashMap<usize, Session>,
     /// Keys asked for and not made yet.
     queued: Vec<String>,
@@ -586,6 +588,8 @@ enum FileAction {
     Crashes,
     About,
     Recovery(solidcraft_engine::recovery::Entry, bool),
+    /// Open the recovered design as an untitled copy: its original file is never its target.
+    RecoveryCopy(solidcraft_engine::recovery::Entry),
 }
 
 /// File view replaces the workspace while keeping the open design and its history intact.
@@ -987,6 +991,12 @@ fn recovery_content(app: &SolveApp, ui: &mut egui::Ui, action: &mut Option<FileA
                 *action = Some(FileAction::Recovery(entry.clone(), recover));
             }
         }
+        // Open as a copy: the recovered work as an untitled design, the original file untouched.
+        let copy = ui_kit::button(ui, app.tr_label("Open as Copy"), ui_kit::Button::Normal);
+        publish(&format!("home:recovery:{index}:copy"), &copy);
+        if copy.clicked() {
+            *action = Some(FileAction::RecoveryCopy(entry.clone()));
+        }
         ui.add_space(Tokens::get().space_12);
     }
 }
@@ -1090,7 +1100,9 @@ fn dispatch(app: &mut SolveApp, ctx: &egui::Context, action: FileAction) {
         }
         FileAction::Crashes => crate::help::run(app, ctx, "crashes"),
         FileAction::About => crate::help::run(app, ctx, "about"),
-        FileAction::Recovery(entry, recover) => crate::recovery_ui::apply(app, entry, recover),
+        FileAction::Recovery(entry, true) => crate::recovery_ui::apply(app, entry, true),
+        FileAction::Recovery(entry, false) => crate::recovery_ui::ask_discard(app, entry),
+        FileAction::RecoveryCopy(entry) => crate::recovery_ui::apply_copy(app, entry),
     }
 }
 

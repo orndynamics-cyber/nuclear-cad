@@ -1,0 +1,62 @@
+{
+  "ar": {
+    "Discard unsaved work?": "تجاهل العمل غير المحفوظ؟",
+    "Open as Copy": "فتح كنسخة",
+    "recovery.discard_confirm": "{name}: ستُحذف التغييرات غير المحفوظة ونسخة الاسترداد الخاصة بها. لا يمكن التراجع عن ذلك."
+  },
+  "de": {
+    "Discard unsaved work?": "Ungespeicherte Arbeit verwerfen?",
+    "Open as Copy": "Als Kopie öffnen",
+    "recovery.discard_confirm": "{name}: Die ungespeicherten Änderungen und ihre Wiederherstellungskopie werden gelöscht. Das kann nicht rückgängig gemacht werden."
+  },
+  "en": {
+    "Discard unsaved work?": "Discard unsaved work?",
+    "Open as Copy": "Open as Copy",
+    "recovery.discard_confirm": "{name}: its unsaved changes and their recovery copy will be deleted. This cannot be undone."
+  },
+  "en-GB": {
+    "Discard unsaved work?": "Discard unsaved work?",
+    "Open as Copy": "Open as Copy",
+    "recovery.discard_confirm": "{name}: its unsaved changes and their recovery copy will be deleted. This cannot be undone."
+  },
+  "fr": {
+    "Discard unsaved work?": "Abandonner le travail non enregistré ?",
+    "Open as Copy": "Ouvrir une copie",
+    "recovery.discard_confirm": "{name} : les modifications non enregistrées et leur copie de récupération seront supprimées. Cette action est irréversible."
+  },
+  "he": {
+    "Discard unsaved work?": "לבטל את העבודה שלא נשמרה?",
+    "Open as Copy": "פתיחה כעותק",
+    "recovery.discard_confirm": "{name}: השינויים שלא נשמרו ועותק השחזור שלהם יימחקו. לא ניתן לבטל פעולה זו."
+  },
+  "ja": {
+    "Discard unsaved work?": "保存していない作業を破棄しますか?",
+    "Open as Copy": "コピーとして開く",
+    "recovery.discard_confirm": "{name}: 保存していない変更と復元用コピーが削除されます。元に戻せません。"
+  },
+  "ko": {
+    "Discard unsaved work?": "저장하지 않은 작업을 버릴까요?",
+    "Open as Copy": "사본으로 열기",
+    "recovery.discard_confirm": "{name}: 저장하지 않은 변경 사항과 복구 사본이 삭제됩니다. 되돌릴 수 없습니다."
+  },
+  "pt-BR": {
+    "Discard unsaved work?": "Descartar o trabalho não salvo?",
+    "Open as Copy": "Abrir como cópia",
+    "recovery.discard_confirm": "{name}: as alterações não salvas e a cópia de recuperação serão apagadas. Isso não pode ser desfeito."
+  },
+  "ru": {
+    "Discard unsaved work?": "Отбросить несохранённую работу?",
+    "Open as Copy": "Открыть как копию",
+    "recovery.discard_confirm": "{name}: несохранённые изменения и их копия для восстановления будут удалены. Это нельзя отменить."
+  },
+  "vi": {
+    "Discard unsaved work?": "Bỏ công việc chưa lưu?",
+    "Open as Copy": "Mở dưới dạng bản sao",
+    "recovery.discard_confirm": "{name}: các thay đổi chưa lưu và bản sao khôi phục của chúng sẽ bị xóa. Không thể hoàn tác."
+  },
+  "zh": {
+    "Discard unsaved work?": "放弃未保存的工作?",
+    "Open as Copy": "作为副本打开",
+    "recovery.discard_confirm": "{name}：未保存的更改及其恢复副本将被删除。此操作无法撤销。"
+  }
+}

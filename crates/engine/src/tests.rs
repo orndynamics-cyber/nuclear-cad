@@ -1642,12 +1642,51 @@ fn measure_items() {
     assert!((r["angle_deg"].as_f64().unwrap() - 90.0).abs() < 1e-6);
     let r = run(&mut s, "inspect.measure", json!({"items": [face(ft, [20.0, 15.0, 20.0])]}));
     assert!((r["items"][0]["area_mm2"].as_f64().unwrap() - 1200.0).abs() < 1e-6, "{r}");
+    // A flat face's size in its own plane and its surface type (Nuclear quick measure).
+    assert_eq!(r["items"][0]["surface"], "plane", "{r}");
+    assert_eq!(r["items"][0]["rectangle"], true, "{r}");
+    let size = |r: &Value| (r["items"][0]["extent_mm"][0].as_f64().unwrap(), r["items"][0]["extent_mm"][1].as_f64().unwrap());
+    let (long, short) = size(&r);
+    assert!((long - 40.0).abs() < 1e-6 && (short - 30.0).abs() < 1e-6, "{r}");
     let v = json!({"type": "vertex", "body": "Body1", "point": [0, 0, 0]});
     let w = json!({"type": "vertex", "body": "Body1", "point": [40, 30, 20]});
     let r = run(&mut s, "inspect.measure", json!({"items": [v, w]}));
     assert!((r["distance_mm"].as_f64().unwrap() - (1600.0f64 + 900.0 + 400.0).sqrt()).abs() < 1e-9);
     assert!(s.execute("inspect.measure", &json!({"items": []})).is_err());
     assert!(s.execute("inspect.measure", &json!({"items": [{"type": "nonsense"}]})).is_err());
+}
+
+/// A 35 × 25 mm face measures 35 × 25 and 875 mm², the same after the body is turned.
+#[test]
+fn a_flat_face_measures_its_own_size_however_the_body_is_turned() {
+    let mut s = Session::default();
+    run(&mut s, "solid.box", json!({"length": 35, "width": 25, "height": 10}));
+    run(&mut s, "solid.move", json!({"bodies": ["Body1"], "axis": [0.3, 0.4, 1.0], "angle": "37 deg", "origin": [0, 0, 0]}));
+    let st = s.model.state();
+    let m = st.body("Body1").unwrap().mesh();
+    let area = |f: usize| -> f64 {
+        m.triangles
+            .iter()
+            .zip(&m.tri_face)
+            .filter(|(_, tf)| **tf as usize == f)
+            .filter_map(|(t, _)| m.tri(t))
+            .map(|[a, b, c]| (b - a).cross(c - a).len() / 2.0)
+            .sum()
+    };
+    let top = (0..6).find(|f| (area(*f) - 875.0).abs() < 1e-6).unwrap();
+    let point = m
+        .triangles
+        .iter()
+        .zip(&m.tri_face)
+        .find(|(_, tf)| **tf as usize == top)
+        .and_then(|(t, _)| m.tri(t))
+        .map(|[a, b, c]| (a + b + c) / 3.0)
+        .unwrap();
+    let r = run(&mut s, "inspect.measure", json!({"items": [{"type": "face", "body": "Body1", "index": top, "point": [point.x, point.y, point.z]}]}));
+    let item = &r["items"][0];
+    assert!((item["area_mm2"].as_f64().unwrap() - 875.0).abs() < 1e-6, "{r}");
+    assert!((item["extent_mm"][0].as_f64().unwrap() - 35.0).abs() < 1e-6 && (item["extent_mm"][1].as_f64().unwrap() - 25.0).abs() < 1e-6, "{r}");
+    assert_eq!((item["rectangle"].as_bool(), item["surface"].as_str()), (Some(true), Some("plane")), "{r}");
 }
 
 /// Section Analysis sets and clears the view cut without touching the design or history.

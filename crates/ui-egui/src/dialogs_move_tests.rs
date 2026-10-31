@@ -540,3 +540,66 @@ fn a_pick_on_the_moved_body_is_taken_back_by_the_current_move() {
     let elsewhere = Sel::Vertex { body: "Other".into(), point: Vec3::new(30.0, 30.0, 10.0) };
     assert_eq!(from_shown(&h.app, elsewhere.clone()), elsewhere, "a pick on another body stays where it was made");
 }
+
+/// Nuclear's contextual M: selected faces get their own edits (move along the normal, rotate about
+/// an edge) and never a move of the whole body; an edge alone is not moved as a body either.
+#[test]
+fn m_on_a_face_edits_the_face_and_never_moves_its_body() {
+    let mut h = crate::scenario::Harness::new();
+    h.app.home.open = false;
+    h.app.run("solid.box", json!({"length": 40, "width": 30, "height": 20})).unwrap();
+    h.frames(2);
+    let bounds = |h: &crate::scenario::Harness| h.app.session.world_state().body("Body1").unwrap().mesh().bounds();
+    let b = bounds(&h);
+    let (x, mid_y, mid_z) = (b.max.x, (b.min.y + b.max.y) / 2.0, (b.min.z + b.max.z) / 2.0);
+    let face = crate::dialogs::face_sel(&h.app.session, Vec3::new(x, mid_y, mid_z)).unwrap();
+    let hinge = crate::dialogs::edge_sel(&h.app.session, Vec3::new(x, mid_y, b.min.z)).unwrap();
+
+    // M with the face selected: the face's menu, no Move/Copy, the body where it was.
+    h.app.session.selection = vec![face.clone()];
+    h.app.start("solid.move");
+    assert!(h.app.dialog.is_none(), "M on a face must not open Move/Copy on its body");
+    assert!(h.app.viewport.context_menu.is_some() && h.app.menu.target == crate::context_menu::Target::MoveFace);
+    let ids: Vec<String> = crate::context_menu::items(&h.app, &crate::context_menu::Target::MoveFace).into_iter().map(|i| i.id).collect();
+    assert!(["solid.offset_face", "solid.draft", "solid.press_pull"].iter().all(|id| ids.iter().any(|i| i == id)), "{ids:?}");
+    assert_eq!(bounds(&h).max, b.max);
+    crate::context_menu::close(&mut h.app);
+
+    // Rotate About an Edge: the face turns about its bottom edge, which stays put.
+    h.app.session.selection = vec![face.clone()];
+    h.app.start("solid.draft");
+    let mut d = h.app.dialog.clone().unwrap();
+    assert!(d.inputs[0].items.contains(&face), "the selected face fills the dialog");
+    d.inputs[1].items = vec![hinge];
+    d.kind = crate::dialogs::Kind::Draft { angle: "10 deg".into() };
+    for (command, params) in crate::dialogs::apply_commands(&h.app, &d).unwrap() {
+        h.app.run(&command, params).unwrap();
+    }
+    h.app.dialog = None;
+    let lean = (b.max.z - b.min.z) / 2.0 * 10f64.to_radians().tan();
+    let moved = [x + lean, x - lean].iter().any(|at| crate::dialogs::face_sel(&h.app.session, Vec3::new(*at, mid_y, mid_z)).is_some());
+    assert!(moved, "the face turned about the edge");
+    assert!(crate::dialogs::edge_sel(&h.app.session, Vec3::new(x, mid_y, b.min.z)).is_some(), "the hinge edge stays where it was");
+    assert!((bounds(&h).min - b.min).len() < 1e-6, "the rest of the body stays");
+    h.app.run("edit.undo", json!({})).unwrap();
+    assert_eq!(bounds(&h).max, b.max, "undo restores the face");
+
+    // Move Along the Normal: the face moves out, the body's other side stays.
+    h.app.session.selection = vec![face];
+    h.app.start("solid.offset_face");
+    let mut d = h.app.dialog.clone().unwrap();
+    d.kind = crate::dialogs::Kind::OffsetFaces { distance: "5 mm".into() };
+    for (command, params) in crate::dialogs::apply_commands(&h.app, &d).unwrap() {
+        h.app.run(&command, params).unwrap();
+    }
+    h.app.dialog = None;
+    assert!((bounds(&h).max.x - (x + 5.0)).abs() < 1e-6 && (bounds(&h).min - b.min).len() < 1e-6);
+    h.app.run("edit.undo", json!({})).unwrap();
+
+    // An edge alone: M says how to change it and moves nothing.
+    h.app.session.selection = vec![crate::dialogs::edge_sel(&h.app.session, Vec3::new(x, mid_y, b.min.z)).unwrap()];
+    h.app.start("solid.move");
+    assert!(h.app.dialog.is_none() && h.app.viewport.context_menu.is_none());
+    assert!(h.app.status.as_ref().is_some_and(|(_, _, error)| *error));
+    assert_eq!(bounds(&h).max, b.max);
+}

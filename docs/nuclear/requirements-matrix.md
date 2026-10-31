@@ -100,10 +100,33 @@ permanent version under the version policy.
 | Versions in a synced folder may be deleted in the cloud by pruning | Documented | Storage window note; no claim that a version reached the cloud |
 | Close with unsaved changes: Save / Don't Save / Cancel | Upstream | Existing close prompt; Don't Save discards the recovery entry (`Autosaver::discard`) |
 | Recovery after a crash: name, time, recover without overwriting the original | Upstream, verified | Recover opens it unsaved with its path (`doc.recover`) |
-| Recovery: "open as copy", "keep for later" | Partial | Recover and discard exist; separate copy/later actions still to do |
+| Recovery: "open as copy", "keep for later" | Implemented, tested | Open as Copy recovers as an untitled design (`recovery_ui::apply_copy`); Later keeps entries for the next launch; Discard asks first (`open_as_copy_leaves_the_original_and_discard_asks_first`) |
 | Abrupt exit detection without a crash handler; two instances | Upstream | Locked journal and per-app locks |
 | Conflict when the file changed elsewhere | Upstream, partial | Save refuses to overwrite a file changed on disk (`disk_changed`); a dedicated conflict copy is still to do |
 | Untitled designs get a stable identity in the library | Missing | Needs a stable document id in the format |
+
+## Audit of 2026-10-31 (combined build `nuclear-integration`)
+
+| Requirement | Status | Evidence / notes |
+|---|---|---|
+| M on a body or component: Move/Copy, move the occurrence | Upstream, verified | `solid.move`, `ui.moveOccurrence` |
+| M on a face never moves the whole body | Implemented, tested | `SolveApp::contextual_move` opens a Move Face menu: Move Along the Normal (`solid.offset_face`), Rotate About an Edge (`solid.draft` with an edge as hinge), Press Pull; `m_on_a_face_edits_the_face_and_never_moves_its_body`; checked in the app |
+| Move a face (direct edit, adjacent faces rebuilt, valid solid) | Implemented, tested | Offset Face moves a face along its normal; for a flat face any translation is its normal component, which the dialog sets directly |
+| Rotate a face about a straight edge, edge stays fixed | Implemented, tested | Draft accepts a straight edge: pull = face normal × edge, neutral plane through the edge; planar faces parallel to the edge; anything else is refused with the reason |
+| Edits are timeline features with editable parameters, undo/redo, save/reopen | Upstream, verified | Offset Face and Draft are ordinary features |
+| M on an edge alone | Partial | Says how to change it (face beside it, Fillet, Chamfer) and moves nothing; moving an edge on its own is still missing |
+| Step control for arrows (linear and angular, custom with units, arrow keys) | Implemented | Step menu beside the Browser title (`manipulator-step-menu`) |
+| Extrude: selected face first, flip, one side, two sides, symmetric, New/Join/Cut/Intersect | Upstream | Extrude dialog directions and operations |
+| Shell: add and remove single faces; continuous inner walls on revolved bodies | Upstream + implemented | Shell thread (`095e949`, `e5cc797`) |
+| Sketch on a selected face | Upstream | Create Sketch on the selected planar face |
+| Quick measure of a face: area, size, type | Implemented, tested | Measure shows Area, Size (Bounds when not a rectangle) and Type; 35 × 25 face gives 35 × 25 and 875 mm², unchanged when the body is turned (`a_flat_face_measures_its_own_size_however_the_body_is_turned`) |
+| Undo/redo, close with Save / Don't Save / Cancel | Upstream | |
+| Interface: Nuclear identity, three languages, HUD like the concept | Implemented | Reports `nuclear-identity-migration.md`, `nuclear-hud-layout.md` |
+| Groups, motion, exploded views | Upstream | Rigid groups, joints, motion studies, exploded views |
+| Portable Windows build | Implemented | The CI artifact is a folder with `nuclear.exe` and the licence files; no installer needed |
+| Untitled designs get a stable identity in the library | Missing | Needs a document id in the format |
+| Conflict copy when the file changed elsewhere | Partial | Save refuses to overwrite a changed file; no separate conflict copy yet |
+| Library: folders, search, rename/move/duplicate, copy/migrate projects, portable project export | Missing | Recents, thumbnails and Show in Explorer exist |
 
 ## 10–19. Later stages
 
