@@ -3,84 +3,72 @@
     "Move Along the Normal": "النقل على طول العمودي",
     "Move Face": "نقل الوجه",
     "Neutral plane or edge": "المستوى المحايد أو حافة",
-    "Rotate About an Edge": "التدوير حول حافة",
-    "nuclear.move.edge_unsupported": "يحرك M الأجسام والأوجه. لتغيير حافة، حدد وجهًا بجانبها واضغط M، أو استخدم التقريب أو الشطف؛ تحريك حافة وحدها غير مدعوم بعد."
+    "Rotate About an Edge": "التدوير حول حافة"
   },
   "de": {
     "Move Along the Normal": "Entlang der Normalen verschieben",
     "Move Face": "Fläche verschieben",
     "Neutral plane or edge": "Neutrale Ebene oder Kante",
-    "Rotate About an Edge": "Um eine Kante drehen",
-    "nuclear.move.edge_unsupported": "M verschiebt Körper und Flächen. Um eine Kante zu ändern, wählen Sie eine angrenzende Fläche und drücken M, oder nutzen Sie Verrundung oder Fase; eine Kante allein zu verschieben wird noch nicht unterstützt."
+    "Rotate About an Edge": "Um eine Kante drehen"
   },
   "en": {
     "Move Along the Normal": "Move Along the Normal",
     "Move Face": "Move Face",
     "Neutral plane or edge": "Neutral plane or edge",
-    "Rotate About an Edge": "Rotate About an Edge",
-    "nuclear.move.edge_unsupported": "M moves bodies and faces. To change an edge, select a face beside it and press M, or use Fillet or Chamfer; moving an edge on its own is not supported yet."
+    "Rotate About an Edge": "Rotate About an Edge"
   },
   "en-GB": {
     "Move Along the Normal": "Move Along the Normal",
     "Move Face": "Move Face",
     "Neutral plane or edge": "Neutral plane or edge",
-    "Rotate About an Edge": "Rotate About an Edge",
-    "nuclear.move.edge_unsupported": "M moves bodies and faces. To change an edge, select a face beside it and press M, or use Fillet or Chamfer; moving an edge on its own is not supported yet."
+    "Rotate About an Edge": "Rotate About an Edge"
   },
   "fr": {
     "Move Along the Normal": "Déplacer le long de la normale",
     "Move Face": "Déplacer la face",
     "Neutral plane or edge": "Plan neutre ou arête",
-    "Rotate About an Edge": "Tourner autour d'une arête",
-    "nuclear.move.edge_unsupported": "M déplace les corps et les faces. Pour modifier une arête, sélectionnez une face voisine et appuyez sur M, ou utilisez Congé ou Chanfrein ; déplacer une arête seule n'est pas encore pris en charge."
+    "Rotate About an Edge": "Tourner autour d'une arête"
   },
   "he": {
     "Move Along the Normal": "הזזה לאורך הנורמל",
     "Move Face": "הזזת פאה",
     "Neutral plane or edge": "מישור ניטרלי או קצה",
-    "Rotate About an Edge": "סיבוב סביב קצה",
-    "nuclear.move.edge_unsupported": "M מזיז גופים ופאות. כדי לשנות קצה, בחרו פאה לידו ולחצו M, או השתמשו בעיגול או בשיפוע; הזזת קצה לבדו עדיין אינה נתמכת."
+    "Rotate About an Edge": "סיבוב סביב קצה"
   },
   "ja": {
     "Move Along the Normal": "法線方向に移動",
     "Move Face": "面を移動",
     "Neutral plane or edge": "中立面またはエッジ",
-    "Rotate About an Edge": "エッジを軸に回転",
-    "nuclear.move.edge_unsupported": "M はボディと面を移動します。エッジを変更するには隣の面を選んで M を押すか、フィレットや面取りを使います。エッジ単独の移動はまだ対応していません。"
+    "Rotate About an Edge": "エッジを軸に回転"
   },
   "ko": {
     "Move Along the Normal": "법선 방향으로 이동",
     "Move Face": "면 이동",
     "Neutral plane or edge": "중립 평면 또는 모서리",
-    "Rotate About an Edge": "모서리를 축으로 회전",
-    "nuclear.move.edge_unsupported": "M은 바디와 면을 이동합니다. 모서리를 바꾸려면 옆의 면을 선택하고 M을 누르거나 필렛 또는 모따기를 사용하세요. 모서리만 따로 이동하는 기능은 아직 지원되지 않습니다."
+    "Rotate About an Edge": "모서리를 축으로 회전"
   },
   "pt-BR": {
     "Move Along the Normal": "Mover ao longo da normal",
     "Move Face": "Mover face",
     "Neutral plane or edge": "Plano neutro ou aresta",
-    "Rotate About an Edge": "Girar em torno de uma aresta",
-    "nuclear.move.edge_unsupported": "M move corpos e faces. Para alterar uma aresta, selecione uma face ao lado dela e pressione M, ou use Filete ou Chanfro; mover só a aresta ainda não é suportado."
+    "Rotate About an Edge": "Girar em torno de uma aresta"
   },
   "ru": {
     "Move Along the Normal": "Сдвинуть по нормали",
     "Move Face": "Переместить грань",
     "Neutral plane or edge": "Нейтральная плоскость или ребро",
-    "Rotate About an Edge": "Повернуть вокруг ребра",
-    "nuclear.move.edge_unsupported": "M перемещает тела и грани. Чтобы изменить ребро, выберите соседнюю грань и нажмите M или используйте скругление или фаску; перемещение одного ребра пока не поддерживается."
+    "Rotate About an Edge": "Повернуть вокруг ребра"
   },
   "vi": {
     "Move Along the Normal": "Di chuyển theo pháp tuyến",
     "Move Face": "Di chuyển mặt",
     "Neutral plane or edge": "Mặt phẳng trung tính hoặc cạnh",
-    "Rotate About an Edge": "Xoay quanh một cạnh",
-    "nuclear.move.edge_unsupported": "M di chuyển vật thể và mặt. Để thay đổi một cạnh, hãy chọn mặt bên cạnh và nhấn M, hoặc dùng Bo tròn hay Vát mép; chưa hỗ trợ di chuyển riêng một cạnh."
+    "Rotate About an Edge": "Xoay quanh một cạnh"
   },
   "zh": {
     "Move Along the Normal": "沿法向移动",
     "Move Face": "移动面",
     "Neutral plane or edge": "中性面或边",
-    "Rotate About an Edge": "绕边旋转",
-    "nuclear.move.edge_unsupported": "M 用于移动实体和面。要修改边，请选择相邻的面后按 M，或使用圆角、倒角；暂不支持单独移动边。"
+    "Rotate About an Edge": "绕边旋转"
   }
 }

@@ -1025,6 +1025,11 @@ fn save_as_named(app: &mut SolveApp, name: &str, extension: &str) {
     let name = format!("{name}.{extension}");
     app.pick_save(&name, &[solidcraft_engine::io::DESIGN_EXT, "json"], |app, path| {
         // A save under way answers a closing tab when it ends.
+        // A design saved for the first time keeps one identity from now on, whatever it is
+        // renamed or moved to (`solidcraft_engine::library::DOCUMENT_ID`).
+        if path.is_some() && solidcraft_engine::library::document_id(&app.session.doc).is_none() {
+            solidcraft_engine::library::ensure_document_id(std::sync::Arc::make_mut(&mut app.session.doc));
+        }
         if let Some(path) = path
             && crate::save_job::start(app, "file.save_as", json!({"path": path}))
         {

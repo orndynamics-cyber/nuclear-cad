@@ -358,7 +358,10 @@ mod tests {
                 } else {
                     assert!(!h.app.quit_requested && h.app.session.is_dirty());
                     assert!(h.app.docs.quitting.is_none() && h.app.docs.closing.is_none());
-                    assert_eq!(h.app.session.doc.to_json(), before);
+                    // The identity a first save gives the design is kept; nothing else changed.
+                    let mut doc = (*h.app.session.doc).clone();
+                    doc.metadata.0.remove(solidcraft_engine::library::DOCUMENT_ID);
+                    assert_eq!(doc.to_json(), before);
                 }
             }
         }

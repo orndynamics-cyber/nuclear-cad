@@ -353,6 +353,13 @@ pub fn open_tab(app: &mut SolveApp, session: Session) -> Result<(), String> {
     Ok(())
 }
 
+/// Run `f` on each open design but the active one (whose session is `app.session`).
+pub(crate) fn for_each_other_session(app: &mut SolveApp, mut f: impl FnMut(&mut Session)) {
+    for slot in app.docs.slots.iter_mut().flatten() {
+        f(&mut slot.session);
+    }
+}
+
 /// Is the active design an untouched new one (it can be replaced instead of opening a tab)?
 pub fn active_is_blank(app: &SolveApp) -> bool {
     let s = &app.session;
@@ -392,12 +399,14 @@ pub fn new_design(app: &mut SolveApp) {
     app.home.open = false;
     if active_is_blank(app) {
         crate::prefs::apply_new_design(app);
+        crate::storage_ui::name_new_design(app);
         return;
     }
     if let Err(e) = open_tab(app, Session::default()) {
         app.set_status(e, true);
     } else {
         crate::prefs::apply_new_design(app);
+        crate::storage_ui::name_new_design(app);
     }
 }
 
@@ -416,6 +425,7 @@ pub fn new_tab(app: &mut SolveApp) {
         app.set_status(e, true);
     } else {
         crate::prefs::apply_new_design(app);
+        crate::storage_ui::name_new_design(app);
     }
 }
 
@@ -676,6 +686,7 @@ pub fn control(app: &mut SolveApp, p: &Value) -> Value {
         _ => {}
     }
     match p.get("changed_on_disk").and_then(Value::as_str) {
+        Some("keep_both") => answer_disk(app, DiskAnswer::KeepBoth),
         Some("save_copy") => answer_disk(app, DiskAnswer::SaveCopy),
         Some("overwrite") => answer_disk(app, DiskAnswer::Overwrite),
         Some("cancel") => answer_disk(app, DiskAnswer::Cancel),

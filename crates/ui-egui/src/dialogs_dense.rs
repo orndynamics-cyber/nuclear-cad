@@ -45,6 +45,7 @@ pub(super) fn command(kind: &Kind) -> Option<&'static str> {
         Kind::Move { .. } => Some("solid.move"),
         Kind::Thread { .. } => Some("solid.thread"),
         Kind::ReplaceFace => Some("solid.replace_face"),
+        Kind::MoveEdge { .. } => Some("solid.draft"),
         Kind::BoundaryFill { .. } => Some("solid.boundary_fill"),
         Kind::Align { .. } => Some("solid.align"),
         Kind::Remove => Some("solid.remove"),
@@ -771,6 +772,11 @@ fn additional_rows(app: &mut SolveApp, d: &mut Dialog, ui: &mut egui::Ui) -> boo
         }
         Kind::OffsetFaces { distance } => {
             enter |= expr_row(ui, "Distance", distance);
+        }
+        Kind::MoveEdge { distance, mode } => {
+            form_row(ui, "Faces", |ui| combo(ui, "move_edge_mode", &crate::move_edge::MODES, mode));
+            enter |= expr_row(ui, "Distance", distance);
+            ui_kit::text(ui, crate::i18n::tr("nuclear.move_edge.hint"), ui_kit::Text::Hint("move_edge:hint"));
         }
         Kind::Thread { designation, length, suggested, of, handedness } => {
             let mut full = length.trim().is_empty();

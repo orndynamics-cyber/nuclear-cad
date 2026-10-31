@@ -1475,11 +1475,11 @@ mod tests {
             assert_eq!(now(&mut h).1, revision, "asking again after {command}");
             last = revision;
         }
-        // Another tab with the same name is another design; back on the first, its revision is
-        // the one it had.
+        // Another new tab is another design (with a provisional name of its own); back on the
+        // first, its revision is the one it had.
         h.call("ui.documents", json!({"action": "new"}));
         let tabs = h.call("ui.documents", json!({}))["result"]["documents"].clone();
-        assert_eq!(tabs[0]["name"], tabs[1]["name"], "{tabs}");
+        assert_eq!((tabs[0]["name"].as_str(), tabs[1]["name"].as_str()), (Some("Untitled"), Some("Untitled 2")), "{tabs}");
         let (other, other_revision) = now(&mut h);
         assert_ne!(other, id);
         assert!(other_revision > last, "{other_revision} after {last}");

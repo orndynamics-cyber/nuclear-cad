@@ -100,6 +100,7 @@ pub mod issue_report;
 pub mod joint_drag;
 pub mod keymap;
 mod length_input;
+pub mod library_ui;
 mod linked_source;
 #[cfg(test)]
 mod loft_rails_dialog_tests;
@@ -171,6 +172,7 @@ mod file_picker;
 pub(crate) mod frame_watch;
 #[cfg(test)]
 mod history_off_thread_tests;
+mod move_edge;
 mod move_preview;
 pub use file_picker::FilePickerFuture;
 #[cfg(test)]
@@ -1376,6 +1378,21 @@ impl SolveApp {
                 .or_else(|| self.viewport.rect.map(|r| r.center()))
                 .unwrap_or(egui::Pos2::ZERO);
             context_menu::open_for(self, at, context_menu::Target::MoveFace);
+            return true;
+        }
+        // One edge: Move Edge, when it is a straight edge between two planar faces; otherwise
+        // the reason, and nothing moves.
+        if let [edge @ Sel::Edge { .. }] = sel.as_slice() {
+            let edge = edge.clone();
+            match move_edge::faces_of(self, &edge) {
+                Ok(_) => {
+                    if let Some(d) = dialogs::Dialog::for_command(self, move_edge::DIALOG) {
+                        let _ = self.session.execute("select.clear", &json!({}));
+                        self.dialog = Some(d);
+                    }
+                }
+                Err(why) => self.set_status(why, true),
+            }
             return true;
         }
         if sel.iter().all(|s| matches!(s, Sel::Face { .. } | Sel::Edge { .. } | Sel::Vertex { .. })) {
