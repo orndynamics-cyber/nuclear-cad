@@ -107,7 +107,7 @@ crate::dialog_descriptor::dialog_descriptors! {
             FeatureKind::Shell { thickness, .. }) {
             thickness: String = "2 mm".into() => thickness.to_string(),
         } => json!({"thickness": thickness});
-        Draft("solid.draft", "DRAFT", [("Faces", FACES, true), ("Neutral plane", PLANES | PLANAR_FACES, false)],
+        Draft("solid.draft", "DRAFT", [("Faces", FACES, true), ("Neutral plane or edge", PLANES | PLANAR_FACES | EDGES, false)],
             FeatureKind::Draft { angle, .. }) {
             angle: String = "5 deg".into() => angle.to_string(),
         } => json!({"angle": angle});
@@ -2031,6 +2031,30 @@ thread_local! {
 }
 
 /// A plane input as a command parameter: an origin/construction plane name or a face plane.
+/// Draft about a straight edge (Rotate Face): the pull direction across the faces and square to
+/// the edge, and the neutral plane through the edge square to the pull, so each face turns about
+/// its line on that plane, which is the edge's line. The faces must be planar and parallel to the
+/// edge; anything else is refused with the reason rather than given an axis of our own.
+fn hinge(app: &SolveApp, faces: &[Sel], edge: &Sel) -> Result<(Vec3, Value), String> {
+    let (at, along) = axis_of(app, edge).ok_or("the edge must be straight")?;
+    let mut pull: Option<Vec3> = None;
+    for face in faces {
+        let Sel::Face { body, index, .. } = face else { return Err("pick faces to rotate".into()) };
+        let (_, n) = planar_face(&app.session, body, *index).ok_or("only planar faces can turn about an edge")?;
+        if n.dot(along).abs() > 1e-6 {
+            return Err("the edge must be parallel to the faces".into());
+        }
+        let across = n.cross(along).normalized().ok_or("the edge must be parallel to the faces")?;
+        match pull {
+            Some(p) if p.cross(across).len() > 1e-6 => return Err("faces turning about one edge must be parallel".into()),
+            Some(_) => {}
+            None => pull = Some(across),
+        }
+    }
+    let pull = pull.ok_or("pick faces to rotate")?;
+    Ok((pull, json!({"origin": pt(at), "normal": pt(pull)})))
+}
+
 fn plane_value(s: &Session, sel: Option<&Sel>) -> Option<Value> {
     match sel? {
         Sel::Plane { name } => Some(json!(name)),
@@ -4119,8 +4143,14 @@ fn dialog_commands(app: &SolveApp, d: &Dialog) -> Result<Vec<(String, Value)>, S
             if sels(d, 0).iter().any(|pick| !matches!(pick, Sel::Face { body: other, .. } if other == body)) {
                 return Err("pick faces of one body".into());
             }
-            let neutral = plane_value(s, sels(d, 1).first()).ok_or("the neutral plane must be a plane or a planar face")?;
-            ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral}))
+            // A straight edge is the hinge (Nuclear's Rotate Face): the faces turn about it.
+            if let Some(edge @ Sel::Edge { .. }) = sels(d, 1).first() {
+                let (pull, neutral) = hinge(app, sels(d, 0), edge)?;
+                ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral, "pull": pt(pull)}))
+            } else {
+                let neutral = plane_value(s, sels(d, 1).first()).ok_or("the neutral plane must be a plane or a planar face")?;
+                ("solid.draft", json!({"body": body, "faces": face_points(0), "neutral": neutral}))
+            }
         }
         Kind::Mirror => {
             need(0, "objects")?;

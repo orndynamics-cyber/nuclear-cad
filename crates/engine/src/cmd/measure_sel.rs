@@ -316,7 +316,25 @@ fn describe(s: &Session, sel: &Sel) -> Option<Item> {
             let planar = normals.first().copied().filter(|n0| normals.iter().all(|n| n.dot(*n0) > 1.0 - 1e-6));
             let mut json = json!({"type": "face", "area_mm2": area, "planar": planar.is_some()});
             let verts: Vec<Vec3> = tris.iter().flat_map(|t| t.iter().copied()).collect();
-            let shape = match solidcraft_kernel::face_surface(&b.body, *index) {
+            let surface = solidcraft_kernel::face_surface(&b.body, *index);
+            json["surface"] = json!(match &surface {
+                Some(solidcraft_kernel::FaceSurface::Plane { .. }) => "plane",
+                Some(solidcraft_kernel::FaceSurface::Cylinder { .. }) => "cylinder",
+                Some(solidcraft_kernel::FaceSurface::Cone { .. }) => "cone",
+                Some(solidcraft_kernel::FaceSurface::Sphere { .. }) => "sphere",
+                Some(solidcraft_kernel::FaceSurface::Torus { .. }) => "torus",
+                None if planar.is_some() => "plane",
+                None => "other",
+            });
+            // A flat face's size in its own plane: exact for a rectangle, the bounding
+            // rectangle otherwise, the same however the part is turned.
+            if let Some(n) = planar
+                && let Some((long, short)) = planar_extent(Vec3::from(n), &verts)
+            {
+                json["extent_mm"] = json!([long, short]);
+                json["rectangle"] = json!((long * short - area).abs() <= 1e-6 * (1.0 + area));
+            }
+            let shape = match surface {
                 Some(solidcraft_kernel::FaceSurface::Cylinder { origin, axis, radius }) => {
                     super::measure_shape::cylinder(origin, axis, radius, &verts).unwrap_or(Shape::Other)
                 }
@@ -473,6 +491,54 @@ fn resolve_pick(st: &solidcraft_doc::ModelState, face: bool, value: &Value) -> s
 }
 
 /// `inspect.measure` with `items` (one or two selections).
+/// The smallest rectangle round points on a plane with normal `n`, as (long side, short side).
+/// One side of the smallest rectangle lies along an edge of the points' convex hull, so each
+/// hull edge's direction is tried.
+fn planar_extent(n: Vec3, pts: &[Vec3]) -> Option<(f64, f64)> {
+    let first = *pts.first()?;
+    let seed = if n.x.abs() < 0.9 { Vec3::X } else { Vec3::Y };
+    let e1 = n.cross(seed).normalized()?;
+    let e2 = n.cross(e1).normalized()?;
+    let mut flat: Vec<(f64, f64)> = pts.iter().map(|p| ((*p - first).dot(e1), (*p - first).dot(e2))).collect();
+    flat.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    flat.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-9 && (a.1 - b.1).abs() < 1e-9);
+    let cross = |o: (f64, f64), a: (f64, f64), b: (f64, f64)| (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0);
+    let mut hull: Vec<(f64, f64)> = Vec::new();
+    for pass in 0..2 {
+        let start = hull.len();
+        let points: Box<dyn Iterator<Item = &(f64, f64)>> = if pass == 0 { Box::new(flat.iter()) } else { Box::new(flat.iter().rev()) };
+        for p in points {
+            while hull.len() >= start + 2 && cross(hull[hull.len() - 2], hull[hull.len() - 1], *p) <= 0.0 {
+                hull.pop();
+            }
+            hull.push(*p);
+        }
+        hull.pop();
+    }
+    if hull.len() < 3 {
+        return None;
+    }
+    let mut best: Option<(f64, f64, f64)> = None;
+    for i in 0..hull.len() {
+        let (a, b) = (hull[i], hull[(i + 1) % hull.len()]);
+        let len = ((b.0 - a.0).powi(2) + (b.1 - a.1).powi(2)).sqrt();
+        if len < 1e-12 {
+            continue;
+        }
+        let (ux, uy) = ((b.0 - a.0) / len, (b.1 - a.1) / len);
+        let (mut u0, mut u1, mut v0, mut v1) = (f64::MAX, f64::MIN, f64::MAX, f64::MIN);
+        for p in &hull {
+            let (u, v) = (p.0 * ux + p.1 * uy, -p.0 * uy + p.1 * ux);
+            (u0, u1, v0, v1) = (u0.min(u), u1.max(u), v0.min(v), v1.max(v));
+        }
+        let (w, h) = (u1 - u0, v1 - v0);
+        if best.is_none_or(|(area, ..)| w * h < area - 1e-12) {
+            best = Some((w * h, w.max(h), w.min(h)));
+        }
+    }
+    best.map(|(_, long, short)| (long, short))
+}
+
 pub(crate) fn measure_items(s: &Session, items: &Value) -> Result<Value> {
     let cmd = "inspect.measure";
     let list = items.as_array().ok_or_else(|| bad(cmd, "`items` must be a list of selections"))?;

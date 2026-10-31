@@ -1359,6 +1359,33 @@ impl SolveApp {
         true
     }
 
+    /// M follows the selection (Nuclear): selected faces offer their own edits (move along the
+    /// normal, rotate about an edge, Press Pull) and are never turned into a move of the whole
+    /// body; an edge or vertex alone is not moved as a body either. Bodies, components and an empty
+    /// selection keep Move/Copy. True when it handled the key.
+    fn contextual_move(&mut self) -> bool {
+        use solidcraft_engine::Sel;
+        let sel = &self.session.selection;
+        if sel.is_empty() || sel.iter().any(|s| matches!(s, Sel::Body { .. } | Sel::Occurrence { .. })) {
+            return false;
+        }
+        if sel.iter().all(|s| matches!(s, Sel::Face { .. })) {
+            let at = sel
+                .iter()
+                .find_map(|s| if let Sel::Face { point, .. } = s { viewport::screen_of(self, *point) } else { None })
+                .or_else(|| self.viewport.rect.map(|r| r.center()))
+                .unwrap_or(egui::Pos2::ZERO);
+            context_menu::open_for(self, at, context_menu::Target::MoveFace);
+            return true;
+        }
+        if sel.iter().all(|s| matches!(s, Sel::Face { .. } | Sel::Edge { .. } | Sel::Vertex { .. })) {
+            let why = crate::i18n::tr("nuclear.move.edge_unsupported").to_string();
+            self.set_status(why, true);
+            return true;
+        }
+        false
+    }
+
     /// Start a command the way a toolbar click does: interactive tools, menus and dialogs for commands
     /// that have them, otherwise run it with defaults.
     pub fn start(&mut self, id: &str) {
@@ -1446,6 +1473,9 @@ impl SolveApp {
         // One selected placement moves as a component, the same way as its Browser menu,
         // retaining the exact instance path and the grounding/rigid-group restrictions.
         // A selected body, or a component picked in the tree, opens Move/Copy on those bodies.
+        if id == "solid.move" && self.contextual_move() {
+            return;
+        }
         if id == "solid.move"
             && let [solidcraft_engine::Sel::Occurrence { path }] = self.session.selection.as_slice()
         {

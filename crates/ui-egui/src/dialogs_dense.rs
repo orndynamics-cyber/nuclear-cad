@@ -917,7 +917,15 @@ fn measure_rows(app: &SolveApp, ui: &mut egui::Ui, r: Option<&Value>, show: &mut
         match it["type"].as_str() {
             Some("edge" | "sketch_curve") if !round => lines.push(format!("{}  {}", tr("Length"), mm(&it["length_mm"]))),
             Some("face" | "profile") => {
-                lines.push(format!("{}  {}", tr("Area"), crate::prefs::show_mm(app, it["area_mm2"].as_f64().unwrap_or(0.0), 2)))
+                lines.push(format!("{}  {}", tr("Area"), crate::prefs::show_mm(app, it["area_mm2"].as_f64().unwrap_or(0.0), 2)));
+                // A flat face's size in its own plane; "Bounds" when it is not a rectangle.
+                if let (Some(long), Some(short)) = (it["extent_mm"][0].as_f64(), it["extent_mm"][1].as_f64()) {
+                    let label = if it["rectangle"].as_bool() == Some(true) { "Size" } else { "Bounds" };
+                    lines.push(format!("{}  {} × {}", tr(label), mm(&json!(long)), mm(&json!(short))));
+                }
+                if let Some(kind) = it["surface"].as_str() {
+                    lines.push(format!("{}  {}", tr("Type"), tr(&format!("measure.surface_{kind}"))));
+                }
             }
             Some("vertex" | "sketch_point") => {
                 let p = &it["position"];
