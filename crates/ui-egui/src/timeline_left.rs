@@ -73,7 +73,7 @@ pub(crate) fn stacked(app: &SolveApp) -> bool {
 
 fn header_outer_height() -> f32 {
     let t = Tokens::get();
-    crate::ui_kit::TREE_ROW_HEIGHT + t.space_8 + t.space_2
+    crate::ui_kit::tree_row_height() + t.space_8 + t.space_2
 }
 
 /// Small, allocation-free transition. Wall-clock progress avoids accumulating lag when
@@ -161,7 +161,7 @@ fn column_rects_at(app: &SolveApp, available: Rect, browser_fold: f32, history_f
 /// remembered share, kept to at least a header and two rows for either card.
 pub(crate) fn browser_split(share: f32, budget: f32, header: f32) -> f32 {
     let share = if share.is_finite() { share } else { crate::prefs::DEFAULT_BROWSER_SHARE };
-    let least = (header + 2.0 * crate::ui_kit::TREE_ROW_HEIGHT).min(budget / 2.0).max(0.0);
+    let least = (header + 2.0 * crate::ui_kit::tree_row_height()).min(budget / 2.0).max(0.0);
     (budget * share).clamp(least, (budget - least).max(least))
 }
 
@@ -337,7 +337,7 @@ fn timeline_transport(app: &mut SolveApp, ui: &mut egui::Ui, names: bool) {
     let t = Tokens::get();
     let mut controls = crate::ui_kit::HistoryTransport::shown(app.preferences.history_play_button);
     let count = controls.len() as f32;
-    let height = if names { crate::ui_kit::TREE_ROW_HEIGHT } else { t.control_height * count + t.space_2 * (count - 1.0) };
+    let height = if names { crate::ui_kit::tree_row_height() } else { t.control_height * count + t.space_2 * (count - 1.0) };
     let (header, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     crate::scenario::publish_rect("history:transport", header);
     crate::scenario::publish_rect("history:header", header);
@@ -1003,7 +1003,7 @@ fn vertical_group_row(
         group: group.parent,
         indent_group: previous_visible_group.filter(|previous| Some(*previous) != group.parent),
     });
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), crate::ui_kit::TREE_ROW_HEIGHT), Sense::click_and_drag());
+    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), crate::ui_kit::tree_row_height()), Sense::click_and_drag());
     drop_zones.push((rect, group.id));
     slots.push(VerticalSlot { y: rect.bottom(), position: if open { position } else { end_position }, group: Some(group.id), indent_group: None });
     if selected || response.hovered() {

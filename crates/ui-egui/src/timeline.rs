@@ -481,6 +481,11 @@ pub(crate) struct Playback {
     next_at: f64,
 }
 
+/// The docked History strip's height.
+const DOCKED_STRIP_HEIGHT: f32 = 40.0;
+/// The docked strip at the Nuclear density: room for 36 pt feature chips.
+const NUCLEAR_STRIP_HEIGHT: f32 = 50.0;
+
 const PLAYBACK_STEP_SECONDS: f64 = 0.5;
 
 pub(crate) fn stop_playback(app: &mut SolveApp) {
@@ -611,7 +616,7 @@ pub fn timeline(app: &mut SolveApp, ui: &mut egui::Ui) {
     } else {
         let response = Container::new(ui.ctx(), Surface::Panel)
             .edge("sc_timeline", Edge::Bottom)
-            .exact_size(40.0)
+            .exact_size(if crate::toolbar::nuclear_hud() { NUCLEAR_STRIP_HEIGHT } else { DOCKED_STRIP_HEIGHT })
             .frame(Container::new(ui.ctx(), Surface::Panel).edge_frame(t.timeline))
             .show(ui, |ui| {
                 timeline_contents(app, ui, false);
@@ -699,6 +704,9 @@ fn timeline_contents(app: &mut SolveApp, ui: &mut egui::Ui, floating: bool) {
                 x = br.right() + 8.0;
             }
             let marker = shown.iter().position(|i| *i >= marker).unwrap_or(shown.len());
+            // Feature chips grow with the strip: 28 pt in the floating card, up to 36 pt in
+            // Nuclear's taller docked strip.
+            let chip = if crate::toolbar::nuclear_hud() { (r.height() - 12.0).clamp(28.0, 36.0) } else { 28.0 };
             let feats: Vec<_> = shown
                 .iter()
                 .filter_map(|i| app.session.doc.features.get(*i))
@@ -725,7 +733,8 @@ fn timeline_contents(app: &mut SolveApp, ui: &mut egui::Ui, floating: bool) {
                     x += t.space_16;
                 }
                 xs.push(x);
-                let br = Rect::from_min_size(pos2(x, r.top() + 6.0), vec2(28.0, 28.0));
+                let chip_top = if crate::toolbar::nuclear_hud() { r.center().y - chip / 2.0 } else { r.top() + 6.0 };
+                let br = Rect::from_min_size(pos2(x, chip_top), vec2(chip, chip));
                 if reveal == Some(*id) {
                     ui.scroll_to_rect(br, Some(egui::Align::Center));
                 }
@@ -833,7 +842,7 @@ fn timeline_contents(app: &mut SolveApp, ui: &mut egui::Ui, floating: bool) {
                     }
                     delete_after_marker_button(app, ui, *id, i, marker);
                 });
-                x += 32.0;
+                x += chip + 4.0;
             }
             let end = x;
             if marker >= feats.len() {

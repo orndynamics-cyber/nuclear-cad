@@ -479,7 +479,7 @@ fn window_page<const INDEX: usize>(ui: &mut egui::Ui, app: &mut SolveApp) {
 pub const THEMES: &[(&str, &str)] = &[("system", "System")];
 /// The theme files Follow System uses for a dark and a light system.
 /// The appearance settings' migration version (see [`lenient`]).
-pub const APPEARANCE_VERSION: u32 = 3;
+pub const APPEARANCE_VERSION: u32 = 4;
 pub const SYSTEM_DARK: &str = "nuclear-graphite";
 pub const SYSTEM_LIGHT: &str = "nuclear-light";
 
@@ -995,7 +995,7 @@ preference_settings! {
     /// Light once, and saving writes 1, so a later choice of the old Dark or Light stays.
     nuclear_appearance: u32 = APPEARANCE_VERSION;
     /// Ribbon density: comfortable (larger icons and targets, the default) or compact.
-    toolbar_density: crate::toolbar::Density = crate::toolbar::Density::Comfortable, PAGE_INTERFACE;
+    toolbar_density: crate::toolbar::Density = crate::toolbar::Density::Nuclear, PAGE_INTERFACE;
     /// The 3D view's background, apart from the theme: the theme's own, a studio gradient, or a
     /// solid graphite, black, light grey or custom colour.
     viewport_background: crate::theme::ViewportBackground = crate::theme::ViewportBackground::Theme, PAGE_INTERFACE;
@@ -3200,6 +3200,11 @@ pub fn lenient(saved: &serde_json::Value) -> Prefs {
         if p.browser_width == OLD_DEFAULT_BROWSER_WIDTH {
             p.browser_width = DEFAULT_BROWSER_WIDTH;
         }
+    }
+    // 4: the large Nuclear HUD. The old default density, Comfortable, moves to it once; Compact
+    // and a later choice of Comfortable (the earlier look) are kept.
+    if p.nuclear_appearance < 4 && p.toolbar_density == crate::toolbar::Density::Comfortable {
+        p.toolbar_density = crate::toolbar::Density::Nuclear;
     }
     p.nuclear_appearance = APPEARANCE_VERSION;
     p
@@ -5951,6 +5956,20 @@ mod tests {
         let chosen = lenient(&json!({"layout": "floating", "nuclear_appearance": APPEARANCE_VERSION}));
         assert_eq!(chosen.layout, LayoutMode::Floating);
         assert_eq!(lenient(&serde_json::to_value(&chosen).unwrap()).layout, LayoutMode::Floating);
+        // The large HUD: the default, reached once from the old default density, never from
+        // Compact or a later choice of the earlier look.
+        use crate::toolbar::Density;
+        assert_eq!(fresh.toolbar_density, Density::Nuclear);
+        for (saved, want) in [
+            (json!({"toolbar_density": "comfortable", "nuclear_appearance": 3}), Density::Nuclear),
+            (json!({"toolbar_density": "compact", "nuclear_appearance": 3}), Density::Compact),
+            (json!({"toolbar_density": "comfortable", "nuclear_appearance": APPEARANCE_VERSION}), Density::Comfortable),
+            (json!({"toolbar_density": "no-such-density"}), Density::Nuclear),
+        ] {
+            let p = lenient(&saved);
+            assert_eq!(p.toolbar_density, want, "{saved}");
+            assert_eq!(lenient(&serde_json::to_value(&p).unwrap()).toolbar_density, want, "{saved}");
+        }
     }
 
     /// Preferences saved before the Nuclear themes move from the old default Dark and Light to
